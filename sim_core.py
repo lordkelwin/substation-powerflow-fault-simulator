@@ -60,8 +60,24 @@ def get_js_app_core():
         dsLV: true, cbLV: true, dsLVB: true,
         dsCapA: true, cbCap: true, dsCapB: true,
         dsF1A: true, cbF1: true, dsF1B: true,
-        dsF2A: true, cbF2: true, dsF2B: true
+        dsF2A: true, cbF2: true, dsF2B: true,
+        cbACR1: true, sec34: true, fuseCutout: true, cbTieB: false,
+        dsIndA: true, cbIndHv: true, dsIndB: true,
+        cbF2Rec: true, cbTie2: false,
+        dsLVBA: true, cbLVB: true, dsLVBB: true,
+        dsF3A: true, cbF3: true, dsF3B: true,
+        dsF4A: true, cbF4: true, dsF4B: true
       },
+      activeProtectionZone3D: null,
+      flisrRestored: false,
+      liveTelemetryOpen: false,
+      targetSubstation: 'A',
+      subBTopology: 'ring',
+      subBEnclosure: 'ais',
+      gateAOpen: false,
+      gateBOpen: false,
+      cityGateOpen: false,
+      wallCutawayActive: false,
       collisionBoxes: [],
       hvDangerSuppressedUntilSafe: false,
       isHazardModalLocked: false,
@@ -88,6 +104,7 @@ def get_js_app_core():
       sldZoom: 1.0,
       sldPanX: 0,
       sldPanY: 0,
+      urdXrayActive: true,
       pqState: {
         scenario: 'sag_swell',
         sagDepthPu: 0.72,
@@ -109,14 +126,30 @@ def get_js_app_core():
         saClampActive: true,
         eafSeverity: 60,
         statcomActive: false,
-        oscPaused: false
+        oscPaused: false,
+        probeNodeA: 'bus_a_138',
+        probeNodeB: 'tr01_pri_delta',
+        showOverlayB: true
       },
       tccState: {
         topo: 'single',
         refSide: 'lv',
         splitContingency: false,
         cursorAmp: 4200,
-        focusedRelay: 'all'
+        focusedRelay: 'all',
+        viewMode: 'highlight',
+        pinnedFault: null
+      },
+      mvaScaling: {
+        mode: 'autosize',
+        txMvaOverride: null,
+        subBTxMva: 15,
+        resKva: 50,
+        urdKva: 900,
+        cbdKva: 750,
+        uniKva: 500,
+        munKva: 1000,
+        indMva: 25.0
       }
     };
 
@@ -148,7 +181,12 @@ def get_js_app_core():
       control: { pos: [16.5, 5.4, 15.8], target: [22.2, 1.6, 11.4] },
       ground: { pos: [6, 22, 28], target: [6, 0, 0] },
       secondary: { pos: [18, 9.5, 13], target: [26, 2.5, 0] },
-      feeders: { pos: [28, 10.5, 15], target: [38, 3.2, 0] }
+      feeders: { pos: [28, 10.5, 15], target: [38, 3.2, 0] },
+      recloser: { pos: [70, 10, 14], target: [86, 5, -6] },
+      cutout_loads: { pos: [215, 28, 46], target: [236, 4.5, 0] },
+      city_gate: { pos: [164, 10.5, 36], target: [182, 3.2, 22] },
+      industrial: { pos: [115, 24, -40], target: [144, 5, -86] },
+      substation_b: { pos: [470, 28, 52], target: [540, 5.5, 0] }
     };
 
     // First-Person Walk Controls State
@@ -175,7 +213,7 @@ def get_js_app_core():
         // 1. Scene & Atmospheric Background (Deep Slate Blue, not pitch black)
         scene = new THREE.Scene();
         scene.background = new THREE.Color(0x0f172a);
-        scene.fog = new THREE.FogExp2(0x0f172a, 0.0035);
+        scene.fog = new THREE.FogExp2(0x0f172a, 0.00048);
 
         clock = new THREE.Clock();
         raycaster = new THREE.Raycaster();
@@ -185,7 +223,7 @@ def get_js_app_core():
         const width = window.innerWidth || 800;
         const height = window.innerHeight || 600;
 
-        camera = new THREE.PerspectiveCamera(50, width / height, 0.2, 500);
+        camera = new THREE.PerspectiveCamera(50, width / height, 0.2, 3200);
 
         renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
         renderer.setSize(width, height);
@@ -207,7 +245,7 @@ def get_js_app_core():
           controls.enableZoom = true;
           controls.maxPolarAngle = Math.PI / 2 - 0.02; // Prevent going below ground
           controls.minDistance = 2.0;
-          controls.maxDistance = 165.0;
+          controls.maxDistance = 1100.0;
           controls.addEventListener('start', () => { activeCameraTweenId++; });
           renderer.domElement.addEventListener('contextmenu', e => e.preventDefault());
         } else {
@@ -254,7 +292,7 @@ def get_js_app_core():
 
         // 8. Start Animation Loop safely
         animate();
-        console.log("EE 415 3D Substation Simulator successfully initialized.");
+        console.log("Substation and Distribution Simulation successfully initialized.");
       } catch (err) {
         console.error("FATAL INITIALIZATION ERROR:", err);
         const banner = document.getElementById('runtime-error-banner');
@@ -317,6 +355,18 @@ def get_js_app_core():
       if (typeof buildCollisionBoxes === 'function') buildCollisionBoxes();
     }
 
+    function registerUnbundledSwitchyardObjects() {
+      ['env', 'auxiliary', 'secondary', 'feeders', 'distribution'].forEach(parentKey => {
+        const grp = switchyardObjects[parentKey];
+        if (grp && grp.userData && grp.userData.unbundled) {
+          Object.entries(grp.userData.unbundled).forEach(([k, uObj]) => {
+            switchyardObjects[k] = uObj;
+          });
+        }
+      });
+      if (scene && typeof scene.updateMatrixWorld === 'function') scene.updateMatrixWorld(true);
+    }
+
     // BUILD COMPLETE 3D SUBSTATION SWITCHYARD
     function buildSubstationYard() {
       const L = getBusLayoutConfig(AppState.busTopology, AppState.enclosureType, AppState.voltageClass);
@@ -331,9 +381,14 @@ def get_js_app_core():
       switchyardObjects.auxiliary = buildStationService(scene, L);
       switchyardObjects.secondary = buildSecondaryBay(scene, L);
       switchyardObjects.feeders = buildFeederBays(scene, L);
+      switchyardObjects.distribution = buildDistributionNetwork(scene, L, {
+        mainRoadZ: switchyardObjects.env?.userData?.mainRoadZ,
+        indTakeoff: switchyardObjects.feeders?.userData?.indTakeoffWorld
+      });
       switchyardObjects.enclosure = buildEnclosureArchitecture(scene, L, AppState.enclosureType);
       switchyardObjects.groundGrid = buildGroundingGrid(scene, L);
       switchyardObjects.rollingSphere = buildRollingSphereShielding(scene, L);
+      registerUnbundledSwitchyardObjects();
       applySubstationLayout(AppState.busTopology, false, false);
     }
 
@@ -392,6 +447,35 @@ def get_js_app_core():
         pos: [L.secBusX + 1.5, 10.5, 15.0],
         target: [L.fdrGantryX - 2.5, 3.2, 0]
       };
+      const distStartX = L.fdrGantryX + 18.95;
+      const cityStartX = +(distStartX + 140.0).toFixed(2);
+      const cityEndX = +(cityStartX + 98.0).toFixed(2);
+      const eastEntryX = +(cityEndX + 140.0).toFixed(2);
+      CAMERA_PRESETS.recloser = {
+        pos: [distStartX + 14.5, 10.2, L.fdr1Z + 14.0],
+        target: [distStartX + 28.0, 5.2, L.fdr1Z]
+      };
+      CAMERA_PRESETS.cutout_loads = {
+        pos: [cityStartX + 32.0, 28.0, L.fdr1Z + 52.0],
+        target: [cityStartX + 49.0, 4.5, (L.fdr1Z + L.fdr2Z) / 2]
+      };
+      const mainRoadZ_cam = switchyardObjects.env?.userData?.mainRoadZ || (L.yardMaxZ + 11.5);
+      CAMERA_PRESETS.city_gate = {
+        pos: [cityStartX - 24.0, 10.5, mainRoadZ_cam + 18.0],
+        target: [cityStartX - 6.0, 3.2, mainRoadZ_cam]
+      };
+      const indSubZ_cam = Math.min(L.yardMinZ - 38.0, L.fdr1Z - 68.0);
+      CAMERA_PRESETS.industrial = {
+        pos: [distStartX + 58.0, 24.0, indSubZ_cam + 46.0],
+        target: [distStartX + 86.0, 5.0, indSubZ_cam]
+      };
+      const LB_cam = getBusLayoutConfig(AppState.subBTopology || 'ring', AppState.subBEnclosure || 'ais', AppState.voltageClass);
+      const subBOriginX_cam = +(eastEntryX + (LB_cam.fdrGantryX + 18.95)).toFixed(2);
+      const subBOriginZ_cam = +(L.fdr1Z + LB_cam.fdr1Z).toFixed(2);
+      CAMERA_PRESETS.substation_b = {
+        pos: [subBOriginX_cam - LB_cam.txX - 42.0, 28.0, subBOriginZ_cam + 52.0],
+        target: [subBOriginX_cam - LB_cam.txX, 5.5, subBOriginZ_cam]
+      };
 
       // Reposition primary HV bay assemblies to IEEE-compliant bay offsets
       if (switchyardObjects.gantry) switchyardObjects.gantry.position.set(L.gantryX, 0, 0);
@@ -423,6 +507,15 @@ def get_js_app_core():
         if (switchyardObjects.feeders) scene.remove(switchyardObjects.feeders);
         switchyardObjects.feeders = buildFeederBays(scene, L);
 
+        if (switchyardObjects.distribution) scene.remove(switchyardObjects.distribution);
+        switchyardObjects.distribution = buildDistributionNetwork(scene, L, {
+          mainRoadZ: switchyardObjects.env?.userData?.mainRoadZ,
+          indTakeoff: switchyardObjects.feeders?.userData?.indTakeoffWorld
+        });
+
+        if (switchyardObjects.protectionOverlay) scene.remove(switchyardObjects.protectionOverlay);
+        switchyardObjects.protectionOverlay = AppState.activeProtectionZone3D ? buildProtectionZoneOverlay(scene, L, AppState.activeProtectionZone3D) : null;
+
         if (switchyardObjects.enclosure) scene.remove(switchyardObjects.enclosure);
         switchyardObjects.enclosure = buildEnclosureArchitecture(scene, L, AppState.enclosureType);
 
@@ -433,6 +526,10 @@ def get_js_app_core():
         if (switchyardObjects.rollingSphere) scene.remove(switchyardObjects.rollingSphere);
         switchyardObjects.rollingSphere = buildRollingSphereShielding(scene, L);
         switchyardObjects.rollingSphere.visible = AppState.rollingSphereActive;
+
+        registerUnbundledSwitchyardObjects();
+        if (typeof syncGateVisualsTo3D === 'function') syncGateVisualsTo3D();
+        if (typeof syncWallCutawayVisualsTo3D === 'function') syncWallCutawayVisualsTo3D();
       }
 
       // Toggle GIS outdoor primary air-insulated masts when housed in pressurized SF6 GIS hall
@@ -448,6 +545,7 @@ def get_js_app_core():
         switchyardObjects.secondary.userData.lvBreaker.visible = (AppState.enclosureType !== 'indoor');
       }
       toggleEnclosureCutaway(AppState.encCutaway);
+      if (typeof syncGateVisualsTo3D === 'function') syncGateVisualsTo3D();
       if (AppState.mode === 'explode' && typeof applyExplodedTransform === 'function') {
         applyExplodedTransform(AppState.selectedComponent, AppState.explodePercentage / 100);
       }
@@ -461,7 +559,7 @@ def get_js_app_core():
     function setVoltageClass(vClass) {
       if (!VOLTAGE_CLASSES[vClass]) return;
       AppState.voltageClass = vClass;
-      document.querySelectorAll('#vclass-opt-69_13, #vclass-opt-138_69, #vclass-opt-230_138').forEach(el => el.classList.remove('selected'));
+      document.querySelectorAll('[id^="vclass-opt-"]').forEach(el => el.classList.remove('selected'));
       const opt = document.getElementById(`vclass-opt-${vClass}`);
       if (opt) opt.classList.add('selected');
       applySubstationLayout(AppState.busTopology, true, true);
@@ -485,27 +583,27 @@ def get_js_app_core():
         <table class="vscale-table">
           <thead>
             <tr>
-              <th>Voltage Class</th>
-              <th>Rating / Vector</th>
+              <th>Cascading Path</th>
+              <th>Public City Bus</th>
+              <th>Industrial HV</th>
               <th>HV BIL</th>
               <th>Phase Spacing</th>
-              <th>Porcelain Sheds</th>
-              <th>Hardware Upgrade</th>
+              <th>Sheds / Hardware</th>
               <th>MAD (IEEE C2)</th>
-              <th>Breaker Rating</th>
+              <th>Cascade X / CB</th>
             </tr>
           </thead>
           <tbody>
             ${rows.map(v => `
               <tr style="${v.id === AppState.voltageClass ? 'background: rgba(14,165,233,0.16);' : ''}">
-                <td style="color:${v.id === AppState.voltageClass ? '#38bdf8' : '#f1f5f9'}; font-weight:700;">${v.shortLabel}</td>
-                <td>${v.mva} MVA ${v.vectorGroup}</td>
+                <td style="color:${v.id === AppState.voltageClass ? '#38bdf8' : '#f1f5f9'}; font-weight:700;">${v.cascadeLabel || v.shortLabel}</td>
+                <td style="color:#34d399; font-weight:700;">${(v.distKv || 13.8).toFixed(1)} kV (Fixed)</td>
+                <td style="color:#fbbf24;">${v.indSubKv || 69} kV (${v.indCustMva || 25} MVA)</td>
                 <td>${v.bilHv} kV</td>
                 <td>${v.phaseSpacing.toFixed(1)} m</td>
-                <td>${v.hvShedsCount} sheds</td>
-                <td>${v.twinBundle ? 'Corona Rings + Twin ACSR' : (v.coronaRings ? 'Corona Grading Rings' : 'Single ACSR Conductor')}</td>
+                <td>${v.hvShedsCount}s · ${v.quadBundle ? 'Quad ACSR + 3×1φ' : (v.twinBundle ? 'Twin ACSR + Corona' : (v.coronaRings ? 'Corona Rings' : 'Single ACSR'))}</td>
                 <td style="color:#f59e0b; font-weight:700;">${v.mad.toFixed(1)} m</td>
-                <td>${v.hvCbKa} kA / ${v.lvCbKa} kA</td>
+                <td>${(v.totalCascadeXPu || v.xPu).toFixed(3)} pu / ${v.hvCbKa} kA</td>
               </tr>
             `).join('')}
           </tbody>
@@ -519,20 +617,135 @@ def get_js_app_core():
       if (modal) modal.style.display = 'none';
     }
 
-    function setEnclosureType(encType) {
-      AppState.enclosureType = encType;
-      document.querySelectorAll('#enc-opt-ais, #enc-opt-gis, #enc-opt-indoor').forEach(el => el.classList.remove('selected'));
-      const opt = document.getElementById(`enc-opt-${encType}`);
-      if (opt) opt.classList.add('selected');
-      applySubstationLayout(AppState.busTopology, true, false);
-      if (!AppState.isWalkMode && AppState.mode !== 'explode') {
-        setCameraPreset('overview');
+    function syncTargetSubstationUI() {
+      const target = AppState.targetSubstation || 'A';
+      const btnA = document.getElementById('target-sub-a');
+      const btnB = document.getElementById('target-sub-b');
+      if (btnA) {
+        btnA.classList.toggle('active', target === 'A');
+        const sp = btnA.querySelector('span');
+        if (sp) sp.textContent = `${target === 'A' ? '●' : '○'} Substation A (Main)`;
       }
+      if (btnB) {
+        btnB.classList.toggle('active', target === 'B');
+        const sp = btnB.querySelector('span');
+        if (sp) sp.textContent = `${target === 'B' ? '●' : '○'} Substation B (Tie)`;
+      }
+      const schemeNames = {
+        single: 'Single Bus',
+        maintransfer: 'Main & Transfer',
+        ring: 'Ring Bus',
+        breakerhalf: 'Breaker & Half',
+        doublebreaker: 'Double Breaker'
+      };
+      const encNames = { ais: 'AIS', gis: 'GIS SF₆', indoor: 'Indoor' };
+      const sumA = document.getElementById('sub-a-cfg-summary');
+      const sumB = document.getElementById('sub-b-cfg-summary');
+      if (sumA) sumA.textContent = `${schemeNames[AppState.busTopology] || AppState.busTopology} · ${encNames[AppState.enclosureType] || 'AIS'}`;
+      if (sumB) sumB.textContent = `${schemeNames[AppState.subBTopology || 'ring'] || AppState.subBTopology} · ${encNames[AppState.subBEnclosure || 'ais'] || 'AIS'}`;
+
+      const activeTopo = (target === 'B') ? (AppState.subBTopology || 'ring') : AppState.busTopology;
+      const activeEnc = (target === 'B') ? (AppState.subBEnclosure || 'ais') : AppState.enclosureType;
+      document.querySelectorAll('#bus-opt-single, #bus-opt-maintransfer, #bus-opt-ring, #bus-opt-breakerhalf, #bus-opt-doublebreaker').forEach(o => o.classList.remove('selected'));
+      const busEl = document.getElementById(`bus-opt-${activeTopo}`);
+      if (busEl) busEl.classList.add('selected');
+      document.querySelectorAll('#enc-opt-ais, #enc-opt-gis, #enc-opt-indoor').forEach(el => el.classList.remove('selected'));
+      const encEl = document.getElementById(`enc-opt-${activeEnc}`);
+      if (encEl) encEl.classList.add('selected');
+    }
+
+    function setTargetSubstation(target) {
+      AppState.targetSubstation = (target === 'B') ? 'B' : 'A';
+      syncTargetSubstationUI();
+      if (!AppState.isWalkMode && AppState.mode !== 'explode') {
+        setCameraPreset(AppState.targetSubstation === 'B' ? 'substation_b' : 'overview');
+      }
+      showToast(AppState.targetSubstation === 'B'
+        ? `Target Switched: TIE SUBSTATION B (${(AppState.subBTopology || 'ring').toUpperCase()} / ${(AppState.subBEnclosure || 'ais').toUpperCase()})`
+        : `Target Switched: MAIN SUBSTATION A (${AppState.busTopology.toUpperCase()} / ${AppState.enclosureType.toUpperCase()})`);
+    }
+
+    function syncWallCutawayVisualsTo3D() {
+      const sy = AppState.wallCutawayActive ? 0.30 : 1.0;
+      const wallA = switchyardObjects.env?.userData?.perimeterWallGroup;
+      if (wallA) wallA.scale.y = sy;
+      const wallB = switchyardObjects.distribution?.userData?.subBEnv?.userData?.perimeterWallGroup;
+      if (wallB) wallB.scale.y = sy;
+      const chk = document.getElementById('toggle-wall-cutaway');
+      if (chk) chk.checked = !!AppState.wallCutawayActive;
+    }
+
+    function togglePerimeterWallCutaway(enabled) {
+      AppState.wallCutawayActive = !!enabled;
+      syncWallCutawayVisualsTo3D();
+      showToast(`3.0m Precast Perimeter Wall Cutaway: ${AppState.wallCutawayActive ? 'CUTAWAY (0.9m Low View)' : 'FULL 3.0m SECURITY HEIGHT'}`);
+    }
+
+    function syncGateVisualsTo3D() {
+      const applyDoorPose = (gateGrp, isOpen) => {
+        if (!gateGrp || !gateGrp.userData) return;
+        if (gateGrp.userData.leafL) gateGrp.userData.leafL.rotation.y = isOpen ? 1.48 : 0;
+        if (gateGrp.userData.leafR) gateGrp.userData.leafR.rotation.y = isOpen ? -1.48 : 0;
+        if (gateGrp.userData.manLeaf) gateGrp.userData.manLeaf.rotation.y = isOpen ? 1.35 : 0;
+        const gSub = gateGrp.userData.subparts && gateGrp.userData.subparts['gate-guardhouse'];
+        if (gSub && gSub.userData && gSub.userData.rfidLed && gSub.userData.rfidLed.material) {
+          gSub.userData.rfidLed.material.color.setHex(isOpen ? 0x22c55e : 0xf59e0b);
+        }
+      };
+      applyDoorPose(switchyardObjects.env?.userData?.gateGroup, !!AppState.gateAOpen);
+      applyDoorPose(switchyardObjects.distribution?.userData?.subBEnv?.userData?.gateGroup, !!AppState.gateBOpen);
+      const cg = switchyardObjects.distribution?.userData?.cityGateGroup;
+      if (cg && cg.userData) {
+        if (cg.userData.boomN) cg.userData.boomN.rotation.x = AppState.cityGateOpen ? -1.32 : 0;
+        if (cg.userData.boomS) cg.userData.boomS.rotation.x = AppState.cityGateOpen ? 1.32 : 0;
+      }
+      const chk = document.getElementById('toggle-sub-gates');
+      if (chk) chk.checked = !!(AppState.gateAOpen || AppState.gateBOpen || AppState.cityGateOpen);
+    }
+
+    function toggleSubstationGate(which = 'both', forceState = null) {
+      if (which === 'A') {
+        AppState.gateAOpen = (forceState !== null) ? !!forceState : !AppState.gateAOpen;
+      } else if (which === 'B') {
+        AppState.gateBOpen = (forceState !== null) ? !!forceState : !AppState.gateBOpen;
+      } else if (which === 'city') {
+        AppState.cityGateOpen = (forceState !== null) ? !!forceState : !AppState.cityGateOpen;
+      } else {
+        const next = (forceState !== null) ? !!forceState : !(AppState.gateAOpen && AppState.gateBOpen && AppState.cityGateOpen);
+        AppState.gateAOpen = next;
+        AppState.gateBOpen = next;
+        AppState.cityGateOpen = next;
+      }
+      syncGateVisualsTo3D();
+      if (typeof buildCollisionBoxes === 'function') buildCollisionBoxes();
+      if (which === 'A') showToast(`Substation A Entrance Gate ${AppState.gateAOpen ? 'OPEN — Drive/Walk Access Unlocked' : 'CLOSED & LOCKED'}`);
+      else if (which === 'B') showToast(`Substation B Entrance Gate ${AppState.gateBOpen ? 'OPEN — Drive/Walk Access Unlocked' : 'CLOSED & LOCKED'}`);
+      else if (which === 'city') showToast(`Utility District & URD City Gate ${AppState.cityGateOpen ? 'BARRIER RAISED — Access Unlocked' : 'BARRIER LOWERED — Controlled Access'}`);
+      else showToast(`Perimeter & City Gates (A, B, City): ${(AppState.gateAOpen && AppState.gateBOpen && AppState.cityGateOpen) ? 'ALL OPEN (Sub A ↔ City ↔ Sub B Walkable)' : 'CLOSED (Secured Perimeters)'}`);
+    }
+
+    function setEnclosureType(encType) {
+      const target = AppState.targetSubstation || 'A';
+      if (target === 'B') {
+        AppState.subBEnclosure = encType;
+        applySubstationLayout(AppState.busTopology, true, true);
+        if (!AppState.isWalkMode && AppState.mode !== 'explode') {
+          setCameraPreset('substation_b');
+        }
+      } else {
+        AppState.enclosureType = encType;
+        applySubstationLayout(AppState.busTopology, true, true);
+        if (!AppState.isWalkMode && AppState.mode !== 'explode') {
+          setCameraPreset('overview');
+        }
+      }
+      syncTargetSubstationUI();
       renderLiveSLD();
+      updateSubtitleAndTelemetry();
       const desc = {
-        ais: 'Outdoor Air-Insulated Substation (AIS): Open-air phase clearances & tubular bus',
-        gis: 'SF₆ Gas-Insulated Substation (GIS): ~28% primary footprint inside hermetically sealed 450 kPa SF₆ hall',
-        indoor: 'Indoor Metal-Clad Switchgear Hall (IEEE C37.20.2): Walk-in cutaway VCB cabinets on secondary side'
+        ais: `Substation ${target} — Outdoor Air-Insulated (AIS): Open-air phase clearances & tubular bus`,
+        gis: `Substation ${target} — SF₆ Gas-Insulated (GIS): ~28% primary footprint inside sealed 450 kPa SF₆ hall`,
+        indoor: `Substation ${target} — Indoor Metal-Clad Switchgear Hall (IEEE C37.20.2): Walk-in cutaway VCB cabinets`
       };
       showToast(desc[encType] || encType);
     }
@@ -769,10 +982,95 @@ def get_js_app_core():
       const post_cbMain = (top === 'single' || top === 'maintransfer') ? !!(s.dsMain && s.cbMain && !s.earthMain) : txFeed;
 
       const secMain = !!(txFeed && s.dsLV && s.cbLV && s.dsLVB);
-      const fdr1 = !!(secMain && s.dsF1A && s.cbF1 && s.dsF1B);
-      const fdr2 = !!(secMain && s.dsF2A && s.cbF2 && s.dsF2B);
+      const ind_hv = !!(txFeed && s.dsIndA !== false && s.cbIndHv !== false && s.dsIndB !== false);
       const capBank = !!(secMain && s.dsCapA && s.cbCap && s.dsCapB);
       const sst100 = !!secMain;
+
+      // TRUE BIDIRECTIONAL GRAPH CONNECTIVITY & POWER-FLOW BFS SOLVER ACROSS SUB A <-> TIES <-> SUB B
+      const subBSourceOn = !!(s.cbTieA !== false && s.dsLVBA !== false && s.cbLVB !== false && s.dsLVBB !== false);
+      const adj = {
+        subA_lv_bus: [], fdr1_head: [], fdr1_sec1: [], fdr1_sec2: [], res_lat: [],
+        fdr2_head: [], fdr2_main: [],
+        subB_lv_bus: [], fdr3_east: [], fdr4_east: []
+      };
+      const addEdge = (u, v) => { adj[u].push(v); adj[v].push(u); };
+      if (s.dsF1A && s.cbF1 && s.dsF1B) addEdge('subA_lv_bus', 'fdr1_head');
+      if (s.cbACR1) addEdge('fdr1_head', 'fdr1_sec1');
+      if (s.sec34) addEdge('fdr1_sec1', 'fdr1_sec2');
+      if (s.fuseCutout) addEdge('fdr1_sec2', 'res_lat');
+      if (s.dsF2A && s.cbF2 && s.dsF2B) addEdge('subA_lv_bus', 'fdr2_head');
+      if (s.cbF2Rec !== false) addEdge('fdr2_head', 'fdr2_main');
+
+      if (s.dsF3A !== false && s.cbF3 !== false && s.dsF3B !== false) addEdge('subB_lv_bus', 'fdr3_east');
+      if (s.dsF4A !== false && s.cbF4 !== false && s.dsF4B !== false) addEdge('subB_lv_bus', 'fdr4_east');
+
+      // Normally-Open Bidirectional Tie Switches (79-TIE1 North Loop, 89-TIE2 South Loop)
+      if (s.cbTieB) addEdge('fdr1_sec2', 'fdr3_east');
+      if (s.cbTie2) addEdge('fdr2_main', 'fdr4_east');
+
+      const runBfs = (startNode, isOn) => {
+        const visited = new Set();
+        if (!isOn) return visited;
+        const q = [startNode];
+        visited.add(startNode);
+        while (q.length > 0) {
+          const cur = q.shift();
+          for (const nxt of (adj[cur] || [])) {
+            if (!visited.has(nxt)) {
+              visited.add(nxt);
+              q.push(nxt);
+            }
+          }
+        }
+        return visited;
+      };
+
+      const reachA = runBfs('subA_lv_bus', secMain);
+      const reachB = runBfs('subB_lv_bus', subBSourceOn);
+      const isLive = (node) => reachA.has(node) || reachB.has(node);
+
+      const fdr1 = isLive('fdr1_head') || !!(secMain && s.dsF1A && s.cbF1 && s.dsF1B);
+      const fdr2 = isLive('fdr2_head') || !!(secMain && s.dsF2A && s.cbF2 && s.dsF2B);
+      const dist_f1_sec1 = isLive('fdr1_sec1');
+      const dist_f1_sec2 = isLive('fdr1_sec2');
+      const dist_lateral = isLive('res_lat');
+      const dist_f2_main = isLive('fdr2_main');
+      const dist_f3 = isLive('fdr3_east');
+      const dist_f4 = isLive('fdr4_east');
+      const dist_sub_b = subBSourceOn;
+      const secMainEff = secMain || reachB.has('subA_lv_bus');
+      const subBLvEff = subBSourceOn || reachA.has('subB_lv_bus');
+
+      const fdr1_from_subB = !!(reachB.has('fdr1_sec2') && !reachA.has('fdr1_sec2'));
+      const fdr2_from_subB = !!(reachB.has('fdr2_main') && !reachA.has('fdr2_main'));
+      const fdr3_from_subA = !!(reachA.has('fdr3_east') && !reachB.has('fdr3_east'));
+      const fdr4_from_subA = !!(reachA.has('fdr4_east') && !reachB.has('fdr4_east'));
+      const subA_lv_backfed_from_B = !secMain && reachB.has('subA_lv_bus');
+      const subB_lv_backfed_from_A = !subBSourceOn && reachA.has('subB_lv_bus');
+
+      const tie1Closed = !!s.cbTieB;
+      const tie2Closed = !!s.cbTie2;
+      const tie1_dir = !tie1Closed ? 'NONE'
+        : ((reachA.has('fdr1_sec2') && !reachB.has('fdr3_east')) ? 'A_TO_B'
+          : ((reachB.has('fdr3_east') && !reachA.has('fdr1_sec2')) ? 'B_TO_A'
+            : ((reachA.has('fdr1_sec2') && reachB.has('fdr3_east')) ? 'PARALLEL' : 'NONE')));
+      const tie2_dir = !tie2Closed ? 'NONE'
+        : ((reachA.has('fdr2_main') && !reachB.has('fdr4_east')) ? 'A_TO_B'
+          : ((reachB.has('fdr4_east') && !reachA.has('fdr2_main')) ? 'B_TO_A'
+            : ((reachA.has('fdr2_main') && reachB.has('fdr4_east')) ? 'PARALLEL' : 'NONE')));
+
+      let loopModeBanner = 'MODE: NORMAL RADIAL SPLIT-LOOP (79-TIE1 & 89-TIE2 OPEN)';
+      if (fdr3_from_subA || fdr4_from_subA) {
+        const tieList = [fdr3_from_subA ? '79-TIE1' : null, fdr4_from_subA ? '89-TIE2' : null].filter(Boolean).join(' & ');
+        loopModeBanner = `MODE: BACK-FEED TRANSFER (SUB A FEEDING CITY LOADS VIA CLOSED ${tieList})`;
+      } else if (fdr1_from_subB || fdr2_from_subB) {
+        const tieList = [fdr1_from_subB ? '79-TIE1' : null, fdr2_from_subB ? '89-TIE2' : null].filter(Boolean).join(' & ');
+        loopModeBanner = `MODE: BACK-FEED TRANSFER (TIE SUB B FEEDING CITY LOADS VIA CLOSED ${tieList})`;
+      } else if (tie1_dir === 'PARALLEL' || tie2_dir === 'PARALLEL') {
+        loopModeBanner = 'MODE: CLOSED-LOOP PARALLEL TIE OPERATION (SUB A || SUB B)';
+      } else if (!dist_f1_sec2 && !dist_f2_main && !dist_f3 && !dist_f4) {
+        loopModeBanner = 'MODE: DISTRIBUTION OUTAGE (NO ACTIVE SOURCE PATH)';
+      }
 
       return {
         incoming: true,
@@ -787,13 +1085,34 @@ def get_js_app_core():
         tx_hv: txFeed,
         sec_lv: txFeed,
         secMain,
-        sec_bus: secMain,
+        secMainEff,
+        subBLvEff,
+        sec_bus: secMainEff,
         fdr1,
         fdr2,
+        ind_hv,
         capBank,
         cap_bank: capBank,
         sst100,
-        sst_tap: sst100
+        sst_tap: sst100,
+        dist_f1_sec1,
+        dist_f1_sec2,
+        dist_f2_main,
+        dist_f3,
+        dist_f4,
+        dist_lateral,
+        dist_sub_b,
+        fdr1_from_subB,
+        fdr2_from_subB,
+        fdr3_from_subA,
+        fdr4_from_subA,
+        subA_lv_backfed_from_B,
+        subB_lv_backfed_from_A,
+        tie1_dir,
+        tie2_dir,
+        loopModeBanner,
+        reachA: Array.from(reachA),
+        reachB: Array.from(reachB)
       };
     }
 
@@ -828,8 +1147,16 @@ def get_js_app_core():
         sec_bus: [0.96, 0.82, 0.25],
         fdr1: [0.16, 0.90, 0.56],
         fdr2: [0.16, 0.90, 0.56],
+        ind_hv: [0.96, 0.62, 0.04],
         cap_bank: [0.38, 0.95, 0.88],
-        sst_tap: [0.98, 0.58, 0.16]
+        sst_tap: [0.98, 0.58, 0.16],
+        dist_f1_sec1: [0.16, 0.90, 0.56],
+        dist_f1_sec2: [0.18, 0.94, 0.62],
+        dist_f2_main: [0.16, 0.90, 0.56],
+        dist_f3: [0.16, 0.90, 0.56],
+        dist_f4: [0.16, 0.90, 0.56],
+        dist_lateral: [0.98, 0.80, 0.22],
+        dist_sub_b: [0.22, 0.85, 0.98]
       };
 
       const isObjVisible = (obj) => {
@@ -849,17 +1176,35 @@ def get_js_app_core():
 
         const srcCurve = obj.userData.flowCurve;
         let worldCurve = null;
+        // Bidirectional 3D particle direction (West->East vs East->West during FLISR back-feed transfer)
+        const isInSubBYard = (() => {
+          let p = obj;
+          while (p) { if (p.name === 'substation_b_yard') return true; p = p.parent; }
+          return false;
+        })();
+        const revSec1 = (cTag === 'dist_f1_sec1' || cTag === 'fdr1') && b.fdr1_from_subB;
+        const revSec2 = (cTag === 'dist_f1_sec2') && b.fdr1_from_subB;
+        const revF2 = (cTag === 'dist_f2_main' || cTag === 'fdr2') && b.fdr2_from_subB;
+        // Outside Sub B yard, f3/f4 catenaries are built West->East (tieCityX->eastEntryX), so Sub B normal feed reverses them; Sub A backfeed keeps West->East
+        const revF3 = (cTag === 'dist_f3') && (!isInSubBYard ? !b.fdr3_from_subA : b.fdr3_from_subA);
+        const revF4 = (cTag === 'dist_f4') && (!isInSubBYard ? !b.fdr4_from_subA : b.fdr4_from_subA);
+        const reverseFlow = revSec1 || revSec2 || revF2 || revF3 || revF4;
         if (srcCurve instanceof THREE.LineCurve3 || (srcCurve.v1 && srcCurve.v2)) {
           const p0 = srcCurve.v1.clone().applyMatrix4(obj.matrixWorld);
           const p1 = srcCurve.v2.clone().applyMatrix4(obj.matrixWorld);
           if (p0.distanceToSquared(p1) < 1e-6) return;
-          worldCurve = new THREE.LineCurve3(p0, p1);
+          worldCurve = reverseFlow
+            ? new THREE.LineCurve3(p1, p0)
+            : new THREE.LineCurve3(p0, p1);
         } else {
           const sampleCount = 10;
           const worldPts = [];
           for (let i = 0; i <= sampleCount; i++) {
             const pt = srcCurve.getPoint(i / sampleCount).clone().applyMatrix4(obj.matrixWorld);
             worldPts.push(pt);
+          }
+          if (reverseFlow) {
+            worldPts.reverse();
           }
           if (worldPts.length < 2) return;
           worldCurve = new THREE.CatmullRomCurve3(worldPts);
@@ -970,7 +1315,7 @@ def get_js_app_core():
       while (curr && curr !== scene) {
         if (curr.visible === false) return true;
         const nm = (curr.name || '').toLowerCase();
-        if (nm === 'ground-plane' || nm === 'gravel-pad' || nm === 'perimeter-fence' || nm === 'sky-dome' || nm === 'pinpoint-fault-marker' || nm === 'leaderlines') {
+        if (nm === 'ground-plane' || nm === 'gravel-pad' || nm === 'perimeter-fence' || nm === 'perimeter-wall' || nm === 'world-survey-grid' || nm === 'sky-dome' || nm === 'pinpoint-fault-marker' || nm === 'leaderlines') {
           return true;
         }
         curr = curr.parent;
@@ -1064,6 +1409,18 @@ def get_js_app_core():
         if (actionTag === 'toggleBreaker') {
           toggleBreakerState();
           showToast(`Control House Panel 4 (52-CS): CB-69-1 Remotely ${AppState.breakerClosed ? 'CLOSED' : 'TRIPPED'}`);
+          return;
+        }
+
+        // Direct interactive Substation A, B & City Entrance Gates (Swing/Lift open + inspect)
+        if (actionTag === 'toggleGateA' || actionTag === 'toggleGateB') {
+          toggleSubstationGate(actionTag === 'toggleGateB' ? 'B' : 'A');
+          selectComponent('substation_gate', false);
+          return;
+        }
+        if (actionTag === 'toggleCityGate') {
+          toggleSubstationGate('city');
+          selectComponent('city_gate', false);
           return;
         }
 
@@ -1376,7 +1733,10 @@ def get_js_app_core():
         transformer: 'transformer',
         control: 'auxiliary',
         secondary: 'secondary',
-        feeders: 'feeders'
+        feeders: 'feeders',
+        recloser: 'dist_recloser',
+        cutout_loads: 'dist_fuse_cutout',
+        substation_b: 'substation_b'
       };
       if (presetCompMap[presetKey]) {
         selectComponent(presetCompMap[presetKey], false);
@@ -1421,19 +1781,25 @@ def get_js_app_core():
       requestAnimationFrame(update);
     }
 
-    // DEDICATED FUNCTION: REBUILD BUSBAR TOPOLOGY (PHYSICAL 3D RECONFIGURATION)
+    // DEDICATED FUNCTION: REBUILD BUSBAR TOPOLOGY (PHYSICAL 3D RECONFIGURATION FOR SUB A OR SUB B)
     function rebuildBusbarTopology(scheme) {
-      AppState.busTopology = scheme;
-      if (AppState.tccState) AppState.tccState.topo = scheme;
-
-      document.querySelectorAll('#bus-opt-single, #bus-opt-maintransfer, #bus-opt-ring, #bus-opt-breakerhalf, #bus-opt-doublebreaker').forEach(o => o.classList.remove('selected'));
-      const selOpt = document.getElementById(`bus-opt-${scheme}`);
-      if (selOpt) selOpt.classList.add('selected');
-
-      applySubstationLayout(scheme, true, false);
-      if (!AppState.isWalkMode && AppState.mode !== 'explode') {
-        setCameraPreset('overview');
+      const target = AppState.targetSubstation || 'A';
+      if (target === 'B') {
+        AppState.subBTopology = scheme;
+        applySubstationLayout(AppState.busTopology, true, true);
+        if (!AppState.isWalkMode && AppState.mode !== 'explode') {
+          setCameraPreset('substation_b');
+        }
+      } else {
+        AppState.busTopology = scheme;
+        if (AppState.tccState) AppState.tccState.topo = scheme;
+        applySubstationLayout(scheme, true, true);
+        if (!AppState.isWalkMode && AppState.mode !== 'explode') {
+          setCameraPreset('overview');
+        }
       }
+
+      syncTargetSubstationUI();
 
       const topNames = {
         single: 'Single Bus Scheme (1 Bus, 1 CB per bay - Lowest Capital Cost)',
@@ -1445,7 +1811,7 @@ def get_js_app_core():
 
       renderLiveSLD();
       updateSubtitleAndTelemetry();
-      showToast(`Reconfigured Switchyard: ${topNames[scheme] || scheme}`);
+      showToast(`Reconfigured Substation ${target}: ${topNames[scheme] || scheme}`);
     }
 
     function selectBusTopology(topology) {
@@ -1514,7 +1880,26 @@ def get_js_app_core():
       { id: 'dsF1B', label: '89-F1B Line Disc', kind: 'ds', seriesCb: 'cbF1', topologies: ['single', 'maintransfer', 'ring', 'breakerhalf', 'doublebreaker'] },
       { id: 'dsF2A', label: '89-F2A Bus Disc', kind: 'ds', seriesCb: 'cbF2', topologies: ['single', 'maintransfer', 'ring', 'breakerhalf', 'doublebreaker'] },
       { id: 'cbF2', label: '52-F2 Feeder 02', kind: 'cb', topologies: ['single', 'maintransfer', 'ring', 'breakerhalf', 'doublebreaker'] },
-      { id: 'dsF2B', label: '89-F2B Line Disc', kind: 'ds', seriesCb: 'cbF2', topologies: ['single', 'maintransfer', 'ring', 'breakerhalf', 'doublebreaker'] }
+      { id: 'dsF2B', label: '89-F2B Line Disc', kind: 'ds', seriesCb: 'cbF2', topologies: ['single', 'maintransfer', 'ring', 'breakerhalf', 'doublebreaker'] },
+      { id: 'dsIndA', label: '89-INDA Ind Disc', kind: 'ds', seriesCb: 'cbIndHv', topologies: ['single', 'maintransfer', 'ring', 'breakerhalf', 'doublebreaker'] },
+      { id: 'cbIndHv', label: '52-IND HV Ind CB', kind: 'cb', topologies: ['single', 'maintransfer', 'ring', 'breakerhalf', 'doublebreaker'] },
+      { id: 'dsIndB', label: '89-INDB Line Disc', kind: 'ds', seriesCb: 'cbIndHv', topologies: ['single', 'maintransfer', 'ring', 'breakerhalf', 'doublebreaker'] },
+      // Outgoing 13.8 kV Distribution Automation & Protection (FLISR) & Tie Substation B
+      { id: 'cbACR1', label: '79-ACR1 F1 Recloser', kind: 'cb', topologies: ['single', 'maintransfer', 'ring', 'breakerhalf', 'doublebreaker'] },
+      { id: 'sec34', label: '34-SECT Sectionalizer', kind: 'ds', seriesCb: 'cbACR1', topologies: ['single', 'maintransfer', 'ring', 'breakerhalf', 'doublebreaker'] },
+      { id: 'fuseCutout', label: '100K Lateral Fuse Cutout', kind: 'cb', topologies: ['single', 'maintransfer', 'ring', 'breakerhalf', 'doublebreaker'] },
+      { id: 'cbTieB', label: '79-TIE1 North Loop Tie', kind: 'cb', topologies: ['single', 'maintransfer', 'ring', 'breakerhalf', 'doublebreaker'] },
+      { id: 'cbF2Rec', label: '79-F2 South Recloser', kind: 'cb', topologies: ['single', 'maintransfer', 'ring', 'breakerhalf', 'doublebreaker'] },
+      { id: 'cbTie2', label: '89-TIE2 South Loop Tie', kind: 'cb', topologies: ['single', 'maintransfer', 'ring', 'breakerhalf', 'doublebreaker'] },
+      { id: 'dsLVBA', label: '89-LVBA SubB Tx Disc', kind: 'ds', seriesCb: 'cbLVB', topologies: ['single', 'maintransfer', 'ring', 'breakerhalf', 'doublebreaker'] },
+      { id: 'cbLVB', label: '52-LVB SubB Main CB', kind: 'cb', topologies: ['single', 'maintransfer', 'ring', 'breakerhalf', 'doublebreaker'] },
+      { id: 'dsLVBB', label: '89-LVBB SubB Bus Disc', kind: 'ds', seriesCb: 'cbLVB', topologies: ['single', 'maintransfer', 'ring', 'breakerhalf', 'doublebreaker'] },
+      { id: 'dsF3A', label: '89-F3A SubB F3 Disc', kind: 'ds', seriesCb: 'cbF3', topologies: ['single', 'maintransfer', 'ring', 'breakerhalf', 'doublebreaker'] },
+      { id: 'cbF3', label: '52-F3 SubB Feeder 03', kind: 'cb', topologies: ['single', 'maintransfer', 'ring', 'breakerhalf', 'doublebreaker'] },
+      { id: 'dsF3B', label: '89-F3B SubB F3 Line', kind: 'ds', seriesCb: 'cbF3', topologies: ['single', 'maintransfer', 'ring', 'breakerhalf', 'doublebreaker'] },
+      { id: 'dsF4A', label: '89-F4A SubB F4 Disc', kind: 'ds', seriesCb: 'cbF4', topologies: ['single', 'maintransfer', 'ring', 'breakerhalf', 'doublebreaker'] },
+      { id: 'cbF4', label: '52-F4 SubB Feeder 04', kind: 'cb', topologies: ['single', 'maintransfer', 'ring', 'breakerhalf', 'doublebreaker'] },
+      { id: 'dsF4B', label: '89-F4B SubB F4 Line', kind: 'ds', seriesCb: 'cbF4', topologies: ['single', 'maintransfer', 'ring', 'breakerhalf', 'doublebreaker'] }
     ];
 
     function syncAllSwitchesTo3D() {
@@ -1611,6 +1996,80 @@ def get_js_app_core():
         updateMvDisc(sw['89-F2A'], s.dsF2A);
         updateMvCb(sw['52-F2'], s.cbF2);
         updateMvDisc(sw['89-F2B'], s.dsF2B);
+        updateMvDisc(sw['89-INDA'], s.dsIndA !== false);
+        updateMvCb(sw['52-IND'], s.cbIndHv !== false);
+        if (sw['52-IND'] && sw['52-IND'].userData && sw['52-IND'].userData.contactsList) {
+          sw['52-IND'].userData.contactsList.forEach(c => {
+            if (c.movingCont) c.movingCont.position.x = (s.cbIndHv !== false) ? 0.35 : 0.65;
+          });
+        }
+        updateMvDisc(sw['89-INDB'], s.dsIndB !== false);
+      }
+
+      // Distribution Poles & Neighboring Tie Substation B Animation
+      const dist = switchyardObjects.distribution;
+      const br = computeEnergizedBranches();
+      if (dist && dist.userData) {
+        const dsw = dist.userData.switches || {};
+        const rec = dsw['79-ACR1'];
+        if (rec && rec.userData && rec.userData.statusFlag && rec.userData.statusFlag.material) {
+          rec.userData.statusFlag.material.color.setHex(s.cbACR1 ? 0xef4444 : 0x10b981);
+        }
+        const rec2 = dsw['79-F2'];
+        if (rec2 && rec2.userData && rec2.userData.statusFlag && rec2.userData.statusFlag.material) {
+          rec2.userData.statusFlag.material.color.setHex(s.cbF2Rec !== false ? 0xef4444 : 0x10b981);
+        }
+        const sect = dsw['34-SECT'];
+        if (sect && sect.userData && sect.userData.bladePairs) {
+          sect.userData.bladePairs.forEach(p => {
+            if (p.blade1) p.blade1.rotation.z = s.sec34 ? Math.PI / 2 : Math.PI / 8;
+          });
+        }
+        const tie2 = dsw['89-TIE2'];
+        if (tie2 && tie2.userData && tie2.userData.bladePairs) {
+          tie2.userData.bladePairs.forEach(p => {
+            if (p.blade1) {
+              p.blade1.rotation.z = s.cbTie2 ? Math.PI / 2 : 0.65;
+              p.blade1.position.x = s.cbTie2 ? 0 : -0.34;
+              p.blade1.position.y = s.cbTie2 ? 7.14 : 7.45;
+            }
+          });
+        }
+        const fuseU = dsw['FUSE-100K'];
+        if (fuseU && fuseU.userData && fuseU.userData.fuseTubes) {
+          fuseU.userData.fuseTubes.forEach(piv => {
+            piv.rotation.x = s.fuseCutout ? 0 : -2.45;
+          });
+        }
+        const subB = dsw['79-TIE'];
+        if (subB && subB.userData && subB.userData.tieFlag && subB.userData.tieFlag.material) {
+          subB.userData.tieFlag.material.color.setHex(s.cbTieB ? 0xef4444 : 0x10b981);
+        }
+        if (dist.userData.loadLights) {
+          const uniLit = !!br.dist_f3;
+          const munLit = !!br.dist_f4;
+          dist.userData.loadLights.res.forEach(m => m.color.setHex(br.dist_lateral ? 0xfde047 : 0x1e293b));
+          dist.userData.loadLights.comm.forEach(m => m.color.setHex(br.dist_f2_main ? 0x38bdf8 : 0x1e293b));
+          dist.userData.loadLights.ind.forEach(m => m.color.setHex(br.ind_hv ? 0xfbbf24 : 0x1e293b));
+          if (dist.userData.loadLights.urd) {
+            dist.userData.loadLights.urd.forEach(m => m.color.setHex(br.dist_f1_sec2 ? 0xfde047 : 0x1e293b));
+          }
+          if (dist.userData.loadLights.uni) {
+            dist.userData.loadLights.uni.forEach(m => m.color.setHex(uniLit ? 0xfde047 : 0x1e293b));
+          }
+          if (dist.userData.loadLights.mun) {
+            dist.userData.loadLights.mun.forEach(m => m.color.setHex(munLit ? 0x38bdf8 : 0x1e293b));
+          }
+        }
+        if (dist.userData.urdTrenchGroup) {
+          dist.userData.urdTrenchGroup.visible = AppState.urdXrayActive !== false;
+        }
+      }
+
+      const flisrEl = document.getElementById('flisr-status-readout');
+      if (flisrEl) {
+        flisrEl.innerText = `${br.loopModeBanner} | 52-F1:${s.cbF1?'CLS':'OPN'} 79-TIE1:${s.cbTieB?'CLS':'NO'} 52-F3:${s.cbF3!==false?'CLS':'OPN'} | 52-F2:${s.cbF2?'CLS':'OPN'} 89-TIE2:${s.cbTie2?'CLS':'NO'} 52-F4:${s.cbF4!==false?'CLS':'OPN'}`;
+        flisrEl.style.borderColor = (br.fdr3_from_subA || br.fdr4_from_subA || br.fdr1_from_subB || br.fdr2_from_subB) ? '#38bdf8' : (br.dist_f1_sec2 || br.dist_f3 ? 'rgba(52,211,153,0.35)' : '#ef4444');
       }
 
       if (typeof updateSubtitleAndTelemetry === 'function') updateSubtitleAndTelemetry();
@@ -1712,8 +2171,15 @@ def get_js_app_core():
         dsLV: true, cbLV: true, dsLVB: true,
         dsCapA: true, cbCap: true, dsCapB: true,
         dsF1A: true, cbF1: true, dsF1B: true,
-        dsF2A: true, cbF2: true, dsF2B: true
+        dsF2A: true, cbF2: true, dsF2B: true,
+        cbACR1: true, sec34: true, fuseCutout: true, cbTieB: false,
+        dsIndA: true, cbIndHv: true, dsIndB: true,
+        cbF2Rec: true, cbTie2: false,
+        dsLVBA: true, cbLVB: true, dsLVBB: true,
+        dsF3A: true, cbF3: true, dsF3B: true,
+        dsF4A: true, cbF4: true, dsF4B: true
       });
+      AppState.flisrRestored = false;
       AppState.isFaultActive = false;
       AppState.faultType = 'none';
       if (pinpointTripTimer) { clearTimeout(pinpointTripTimer); pinpointTripTimer = null; }
@@ -1841,63 +2307,281 @@ def get_js_app_core():
       }, 700);
     }
 
-    // INTERACTIVE PINPOINT FAULT LOCATION ENGINE (3D YARD & SLD NODES)
+    // SIMULATION EVENT 5: SCADA FLISR AUTOMATED LOOP ISOLATION & SUBSTATION B BACK-FEED TRANSFER
+    function triggerFlisrLoopRestoration() {
+      const L = getBusLayoutConfig(AppState.busTopology, AppState.enclosureType, AppState.voltageClass);
+      const distStart = L.fdrGantryX + 18.95;
+      AppState.isFaultActive = true;
+      AppState.faultType = 'flisr_fault';
+      AppState.switchStates.cbF1 = true;
+      AppState.switchStates.cbACR1 = true;
+      AppState.switchStates.sec34 = true;
+      AppState.switchStates.cbTieB = false;
+      AppState.switchStates.cbF3 = true;
+      AppState.switchStates.cbLVB = true;
+
+      if (dynamicArcLight) {
+        dynamicArcLight.color.setHex(0xef4444);
+        dynamicArcLight.position.set(distStart + 15.0, 6.8, L.fdr1Z);
+        dynamicArcLight.intensity = 10;
+      }
+      if (soundEngine && soundEngine.playNoiseBurst) soundEngine.playNoiseBurst(0.32, 0.6);
+      showToast('FLISR STEP 1/3: Permanent fault between 79-ACR1 & 34-SECT! Recloser executing Curve A/B lockout...');
+
+      setTimeout(() => {
+        AppState.switchStates.cbACR1 = false;
+        AppState.switchStates.sec34 = false; // Drops open cleanly during 79-ACR1 dead-time count=2!
+        if (soundEngine && soundEngine.playBreakerTrip) soundEngine.playBreakerTrip();
+        syncAllSwitchesTo3D();
+        renderSwitchMatrix();
+        renderLiveSLD();
+        showToast('FLISR STEP 2/3: 79-ACR1 locked OPEN & 34-SECT dropped open during zero-current dead-time! Verifying ANSI 25...');
+      }, 550);
+
+      setTimeout(() => {
+        if (dynamicArcLight) dynamicArcLight.intensity = 0;
+        AppState.switchStates.cbTieB = true;
+        AppState.flisrRestored = true;
+        AppState.isFaultActive = false;
+        if (soundEngine && soundEngine.playBreakerTrip) soundEngine.playBreakerTrip();
+        syncAllSwitchesTo3D();
+        renderSwitchMatrix();
+        renderLiveSLD();
+        showToast('FLISR COMPLETE: 79-TIE CLOSED! Commercial (750 kVA) & Industrial (1.5 MVA) restored by Substation B!');
+      }, 1250);
+    }
+
+    // INTERACTIVE 23-NODE END-TO-END SYSTEM PINPOINT FAULT ENGINE (SUB A <-> CITY LOOP <-> TIE SUB B <-> HV IND)
     const PINPOINT_FAULT_NODES = {
       node1_incoming: {
-        id: 'node1_incoming',
-        name: 'Incoming Line / Gantry Dead-End',
+        id: 'node1_incoming', group: 'Substation A (HV/EHV)',
+        name: 'Node 1: Incoming EHV/HV Line / Gantry Dead-End',
         zone: 'ANSI 21 Distance + 67 Directional OC',
         breakers: ['cbMain', 'cb1', 'cb4', 'cbA', 'cbTIE', 'cb1A', 'cb1B'],
         breakerNames: (top) => (top === 'ring' ? '52-1, 52-4' : (top === 'breakerhalf' ? '52-A, 52-TIE' : (top === 'doublebreaker' ? '52-1A, 52-1B' : '52-69'))),
+        upstreamDevices: () => ['51-HV (67/21 Zone-1)', '51-HV (Backup)'],
+        tccKeys: ['topo'], refSide: 'hv', xrRatio: 16.0,
         defaultPos: (L) => ({ x: L.gantryX + 2.5, y: 6.8, z: 0 })
       },
+      node_cascade_mid: {
+        id: 'node_cascade_mid', group: 'Substation A (HV/EHV)',
+        name: 'Node 1B: Intermediate Cascading Step-Down Bus (230/138/69 kV)',
+        zone: 'ANSI 87T Autotransformer Diff + 51-HV Cascade OC',
+        breakers: ['cbMain', 'cb1', 'cb2', 'cbTIE', 'cb2A', 'cb2B'],
+        breakerNames: () => '52-ATR Cascade Interstage Breaker',
+        upstreamDevices: () => ['87T Autotransformer Diff', '51-HV Backup'],
+        tccKeys: ['topo', 'diff'], refSide: 'hv', xrRatio: 15.0,
+        defaultPos: (L) => ({ x: L.txX - 5.5, y: 6.2, z: 0 })
+      },
       node2_hv_bus: {
-        id: 'node2_hv_bus',
-        name: 'Primary HV Busbar',
-        zone: 'ANSI 87B High-Voltage Bus Differential',
+        id: 'node2_hv_bus', group: 'Substation A (HV/EHV)',
+        name: 'Node 2: Substation A Primary HV Busbar',
+        zone: 'ANSI 87B High-Voltage Bus Differential + 50BF',
         breakers: ['cbMain', 'cbBT', 'cb1', 'cb2', 'cb3', 'cb4', 'cbA', 'cbTIE', 'cbB', 'cb1A', 'cb2A'],
-        breakerNames: (top) => (top === 'ring' ? '52-1, 52-2, 52-3, 52-4' : (top === 'breakerhalf' ? '52-A, 52-TIE, 52-B' : (top === 'doublebreaker' ? '52-1A, 52-2A (Bus A Diff 87B — Bus B stays LIVE)' : (top === 'maintransfer' ? '52-69, 52-BT' : '52-69')))),
+        breakerNames: (top) => (top === 'ring' ? '52-1..52-4' : (top === 'breakerhalf' ? '52-A, 52-TIE, 52-B' : (top === 'doublebreaker' ? '52-1A, 52-2A (Bus A Diff)' : (top === 'maintransfer' ? '52-69, 52-BT' : '52-69')))),
+        upstreamDevices: () => ['87B Bus Diff (0.025 s)', '51-HV Backup'],
+        tccKeys: ['diff', 'topo'], refSide: 'hv', xrRatio: 14.5,
         defaultPos: (L) => ({ x: L.busbarX || L.cbX, y: 5.8, z: 0 })
       },
       node3_tx_hv: {
-        id: 'node3_tx_hv',
-        name: 'TR-01 Primary Bushing (H1/H2/H3)',
+        id: 'node3_tx_hv', group: 'Substation A (HV/EHV)',
+        name: 'Node 3: TR-01 Primary HV Bushings (H1/H2/H3)',
         zone: 'ANSI 87T Transformer Differential + 63 Buchholz',
         breakers: ['cbMain', 'cb1', 'cb2', 'cbTIE', 'cbB', 'cb2A', 'cb2B', 'cbLV'],
         breakerNames: (top) => (top === 'ring' ? '52-1, 52-2 + 52-LV' : (top === 'breakerhalf' ? '52-TIE, 52-B + 52-LV' : (top === 'doublebreaker' ? '52-2A, 52-2B + 52-LV' : '52-69 + 52-LV'))),
+        upstreamDevices: () => ['87T Differential (0.025 s)', '51-HV Backup'],
+        tccKeys: ['diff', 'topo'], refSide: 'hv', xrRatio: 14.0,
         defaultPos: (L) => ({ x: L.txX - 1.2, y: 4.8, z: 0 })
       },
       node4_tx_lv: {
-        id: 'node4_tx_lv',
-        name: 'TR-01 Secondary Bushing / NGR Lead (X1/X2/X3/X0)',
-        zone: 'ANSI 87T Transformer Differential + 51G Neutral',
+        id: 'node4_tx_lv', group: 'Substation A (LV)',
+        name: 'Node 4: TR-01 Secondary Bushings / NGR Lead (X1/X2/X3/X0)',
+        zone: 'ANSI 87T Differential + 51G Neutral Overcurrent',
         breakers: ['cbMain', 'cb1', 'cb2', 'cbTIE', 'cbB', 'cb2A', 'cb2B', 'cbLV'],
         breakerNames: (top) => (top === 'ring' ? '52-1, 52-2 + 52-LV' : (top === 'breakerhalf' ? '52-TIE, 52-B + 52-LV' : (top === 'doublebreaker' ? '52-2A, 52-2B + 52-LV' : '52-69 + 52-LV'))),
+        upstreamDevices: () => ['87T Diff (0.025 s)', '51-LV', '51-HV'],
+        tccKeys: ['diff', 'lv', 'topo'], refSide: 'lv', xrRatio: 12.0,
         defaultPos: (L) => ({ x: L.txX + 1.4, y: 4.4, z: 0 })
       },
       node5_lv_bus: {
-        id: 'node5_lv_bus',
-        name: 'Secondary Distribution Main Bus',
-        zone: 'ANSI 87B-LV / 50/51 Secondary Bus OC',
+        id: 'node5_lv_bus', group: 'Substation A (LV)',
+        name: 'Node 5: Substation A Secondary Main Bus (13.8 kV Bus A)',
+        zone: 'ANSI 87B-LV / 50/51-LV Secondary Main VCB',
         breakers: ['cbLV', 'cbCap'],
         breakerNames: () => '52-LV (Main LV VCB), 52-CAP',
+        upstreamDevices: () => ['50/51-LV Main', '51-HV Backup'],
+        tccKeys: ['lv', 'topo'], refSide: 'lv', xrRatio: 11.2,
         defaultPos: (L) => ({ x: L.secBusX, y: 4.8, z: 0 })
       },
+      node7_ind_hv: {
+        id: 'node7_ind_hv', group: 'HV Industrial Corridor',
+        name: 'Node 7: Dedicated HV Industrial Sub-Tx Feeder (52-IND)',
+        zone: 'ANSI 50/51-IND & 21-IND Distance OC (Backup 51-HV)',
+        breakers: ['cbIndHv'],
+        breakerNames: () => '52-IND (Dedicated 69/138 kV Industrial Bay)',
+        upstreamDevices: () => ['50/51-IND', '51-HV Backup'],
+        tccKeys: ['ind', 'topo'], refSide: 'hv', xrRatio: 9.5, defaultDistPct: 40,
+        defaultPos: (L) => ({ x: L.fdrGantryX + 6.0, y: 7.5, z: L.fdr1Z - 26.0 })
+      },
+      node8_ind_sub: {
+        id: 'node8_ind_sub', group: 'HV Industrial Corridor',
+        name: 'Node 8: Customer Heavy Industrial Substation (25 MVA, 52-CUST)',
+        zone: 'ANSI 52-CUST + 50/51-IND Selective Backup',
+        breakers: ['cbIndHv'],
+        breakerNames: () => '52-CUST (Customer) -> Backup 52-IND',
+        upstreamDevices: () => ['52-CUST', '50/51-IND', '51-HV Backup'],
+        tccKeys: ['ind', 'topo'], refSide: 'hv', xrRatio: 7.8, defaultDistPct: 100,
+        defaultPos: (L) => ({ x: L.fdrGantryX + 104.0, y: 5.5, z: L.fdr1Z - 68.0 })
+      },
       node6_fdr1: {
-        id: 'node6_fdr1',
-        name: 'Distribution Feeder 01 (FDR-01)',
-        zone: 'ANSI 50/51 Phase OC + 51N Ground OC',
+        id: 'node6_fdr1', group: '13.8 kV City Loop (West)',
+        name: 'Node 6A: Feeder 01 Main Overhead Trunk (52-F1)',
+        zone: 'ANSI 50/51-F1 Phase OC + 51N Ground OC',
         breakers: ['cbF1'],
-        breakerNames: () => '52-F1 ONLY (FDR-02 & TR-01 stay energized)',
-        defaultPos: (L) => ({ x: L.fdrGantryX - 2.0, y: 3.6, z: L.fdr1Z })
+        breakerNames: () => '52-F1 ONLY (F2 & TR-01 remain live)',
+        upstreamDevices: () => ['50/51-F1', '50/51-LV Main', '51-HV'],
+        tccKeys: ['fdr', 'lv', 'topo'], refSide: 'lv', xrRatio: 6.5, defaultDistPct: 35,
+        defaultPos: (L) => ({ x: L.fdrGantryX + 18.0, y: 7.2, z: L.fdr1Z })
+      },
+      node9_acr1: {
+        id: 'node9_acr1', group: '13.8 kV City Loop (West)',
+        name: 'Node 9: Pole Recloser 79-ACR1 Load-Side Trunk',
+        zone: 'ANSI 79-ACR1 (Fast Curve A -> Slow B) -> Backup 52-F1',
+        breakers: ['cbACR1'],
+        breakerNames: () => '79-ACR1 Recloser (Backup: 52-F1)',
+        upstreamDevices: () => ['79-ACR1 Fast/Slow', '50/51-F1', '50/51-LV'],
+        tccKeys: ['recFast', 'recSlow', 'fdr', 'lv'], refSide: 'lv', xrRatio: 4.8, defaultDistPct: 50,
+        defaultPos: (L) => ({ x: L.fdrGantryX + 48.0, y: 7.2, z: L.fdr1Z })
+      },
+      node10_res_lat: {
+        id: 'node10_res_lat', group: '13.8 kV City Loop (West)',
+        name: 'Node 10: 34-SECT & 100K Fuse Overhead Residential Lateral (RES 50 kVA)',
+        zone: 'Fuse-Saving: 79-ACR1 Fast < 100K Fuse Clear < 79-ACR1 Slow',
+        breakers: ['fuseCutout'],
+        breakerNames: () => '100K Fuse Cutout / 34-SECT (Saved by 79-ACR1 Fast)',
+        upstreamDevices: () => ['100K Fuse', '79-ACR1', '50/51-F1', '50/51-LV'],
+        tccKeys: ['recFast', 'fuseMin', 'fuseClear', 'recSlow', 'fdr'], refSide: 'lv', xrRatio: 3.4, defaultDistPct: 75,
+        defaultPos: (L) => ({ x: L.fdrGantryX + 201.0, y: 7.0, z: L.fdr1Z - 8.5 })
+      },
+      node11_urd_pad: {
+        id: 'node11_urd_pad', group: '13.8 kV City Loop (West)',
+        name: 'Node 11: Gated URD Riser Pole & Loop Pad-Mounts (150 kVA × 6)',
+        zone: '34-SECT Sectionalizer (Count=2) + Bay-O-Net Fuse + 79-ACR1',
+        breakers: ['sec34'],
+        breakerNames: () => '34-SECT Sectionalizer / Bay-O-Net Fuse',
+        upstreamDevices: () => ['34-SECT (Arm=160A)', '79-ACR1 Slow', '50/51-F1', '50/51-LV'],
+        tccKeys: ['sect', 'recSlow', 'fdr', 'lv'], refSide: 'lv', xrRatio: 4.0, defaultDistPct: 65,
+        defaultPos: (L) => ({ x: L.fdrGantryX + 170.0, y: 2.2, z: L.fdr1Z - 14.0 })
       },
       node6_fdr2: {
-        id: 'node6_fdr2',
-        name: 'Distribution Feeder 02 (FDR-02)',
-        zone: 'ANSI 50/51 Phase OC + 51N Ground OC',
-        breakers: ['cbF2'],
-        breakerNames: () => '52-F2 ONLY (FDR-01 & TR-01 stay energized)',
-        defaultPos: (L) => ({ x: L.fdrGantryX - 2.0, y: 3.6, z: L.fdr2Z })
+        id: 'node6_fdr2', group: '13.8 kV City Loop (West)',
+        name: 'Node 6B: Feeder 02 Commercial Express Trunk (52-F2 / 79-F2)',
+        zone: 'ANSI 50/51-F2 + 79-F2 Commercial Recloser',
+        breakers: ['cbF2Rec'],
+        breakerNames: () => '79-F2 / 52-F2 (F1 & TR-01 stay energized)',
+        upstreamDevices: () => ['79-F2 / 50/51-F2', '50/51-LV Main', '51-HV'],
+        tccKeys: ['recSlow', 'fdr', 'lv', 'topo'], refSide: 'lv', xrRatio: 5.8, defaultDistPct: 45,
+        defaultPos: (L) => ({ x: L.fdrGantryX + 47.0, y: 7.2, z: L.fdr2Z })
+      },
+      node12_cbd_bus: {
+        id: 'node12_cbd_bus', group: '13.8 kV City Loop (West)',
+        name: 'Node 12: CBD Commercial District & Hospital 750 kVA Bus',
+        zone: '750 kVA Pad-Mount Fuse + 79-F2 / 52-F2 Selective Trip',
+        breakers: ['cbF2Rec'],
+        breakerNames: () => '79-F2 Recloser (Backup: 52-F2)',
+        upstreamDevices: () => ['100K/Bay-O-Net Fuse', '79-F2', '50/51-F2', '50/51-LV'],
+        tccKeys: ['fuseClear', 'recSlow', 'fdr', 'lv'], refSide: 'lv', xrRatio: 4.2, defaultDistPct: 80,
+        defaultPos: (L) => ({ x: L.fdrGantryX + 206.0, y: 2.2, z: L.fdr2Z + 12.0 })
+      },
+      node13_tie1: {
+        id: 'node13_tie1', group: 'Loop Ties & East City',
+        name: 'Node 13: North Loop Tie Recloser 79-TIE1 (F1 ↔ F3 Boundary)',
+        zone: 'Loop Automation: Trips Active Source Feed (F1 or F3) + Opens Tie',
+        breakers: ['cbTieB'],
+        breakerNames: (top, br) => (br && br.fdr3_from_subA ? '79-TIE1 (Sub A Back-Feed Active)' : '79-TIE1 Boundary / 52-F1 / 52-F3'),
+        upstreamDevices: (br) => (br && br.fdr3_from_subA ? ['79-TIE1', '79-ACR1', '50/51-F1', '50/51-LV'] : ['79-TIE1', '50/51-F3 (Sub B)', '50/51-LVB']),
+        tccKeys: ['recSlow', 'fdr', 'lv'], refSide: 'lv', xrRatio: 3.6, defaultDistPct: 90,
+        defaultPos: (L) => ({ x: L.fdrGantryX + 221.0, y: 7.2, z: L.fdr1Z })
+      },
+      node14_tie2: {
+        id: 'node14_tie2', group: 'Loop Ties & East City',
+        name: 'Node 14: South Loop Tie Switch 89-TIE2 (F2 ↔ F4 Boundary)',
+        zone: 'Loop Automation: Cleared by Active Source Recloser/Breaker',
+        breakers: ['cbTie2'],
+        breakerNames: () => '89-TIE2 Tie / Active Feeder Breaker (52-F2 or 52-F4)',
+        upstreamDevices: (br) => (br && br.fdr4_from_subA ? ['79-F2', '50/51-F2', '50/51-LV'] : ['50/51-F4 (Sub B)', '50/51-LVB']),
+        tccKeys: ['fdr', 'lv'], refSide: 'lv', xrRatio: 3.5, defaultDistPct: 90,
+        defaultPos: (L) => ({ x: L.fdrGantryX + 221.0, y: 7.2, z: L.fdr2Z })
+      },
+      node15_uni_bus: {
+        id: 'node15_uni_bus', group: 'Loop Ties & East City',
+        name: 'Node 15: East University Campus Pad-Mount Bus (500 kVA, Feeder 03)',
+        zone: 'ANSI 50/51-F3 (Normal) OR 79-TIE1 / 52-F1 (Back-Feed Transfer)',
+        breakers: ['cbF3'],
+        breakerNames: (top, br) => (br && br.fdr3_from_subA ? '79-TIE1 -> 52-F1 (Sub A Back-Feed Path)' : '52-F3 ONLY (Tie Substation B)'),
+        upstreamDevices: (br) => (br && br.fdr3_from_subA ? ['79-TIE1 / 79-ACR1', '50/51-F1 (Sub A)', '50/51-LV'] : ['50/51-F3 (Sub B)', '50/51-LVB', '51-HV (Sub B)']),
+        tccKeys: ['recSlow', 'fdr', 'lv'], refSide: 'lv', xrRatio: 3.9, defaultDistPct: 85,
+        defaultPos: (L) => ({ x: L.fdrGantryX + 244.0, y: 2.2, z: L.fdr1Z - 14.0 })
+      },
+      node16_mun_bus: {
+        id: 'node16_mun_bus', group: 'Loop Ties & East City',
+        name: 'Node 16: Municipal Water & Logistics Park Bus (1 MVA, Feeder 04)',
+        zone: 'ANSI 50/51-F4 (Normal) OR 89-TIE2 / 52-F2 (Back-Feed Transfer)',
+        breakers: ['cbF4'],
+        breakerNames: (top, br) => (br && br.fdr4_from_subA ? '79-F2 -> 52-F2 (Sub A Back-Feed via 89-TIE2)' : '52-F4 ONLY (Tie Substation B)'),
+        upstreamDevices: (br) => (br && br.fdr4_from_subA ? ['79-F2', '50/51-F2 (Sub A)', '50/51-LV'] : ['50/51-F4 (Sub B)', '50/51-LVB', '51-HV (Sub B)']),
+        tccKeys: ['fdr', 'lv', 'topo'], refSide: 'lv', xrRatio: 4.1, defaultDistPct: 85,
+        defaultPos: (L) => ({ x: L.fdrGantryX + 244.0, y: 2.2, z: L.fdr2Z + 15.0 })
+      },
+      node17_subb_hv: {
+        id: 'node17_subb_hv', group: 'Tie Substation B',
+        name: 'Node 17: Tie Substation B HV Busbar',
+        zone: 'ANSI 87B-SubB High-Speed Bus Differential',
+        breakers: ['cbTieA'],
+        breakerNames: () => 'Sub B HV Ring/Main Breakers + 52-LVB',
+        upstreamDevices: () => ['87B-SubB Diff (0.025 s)', '51-HV (Sub B)'],
+        tccKeys: ['diff', 'topo'], refSide: 'hv', xrRatio: 13.5,
+        defaultPos: (L) => ({ x: L.fdrGantryX + 435.0, y: 5.5, z: L.fdr1Z })
+      },
+      node18_tr02: {
+        id: 'node18_tr02', group: 'Tie Substation B',
+        name: 'Node 18: Tie Transformer TR-02 Terminals (15 MVA)',
+        zone: 'ANSI 87T-TR02 Transformer Differential + 63 Buchholz',
+        breakers: ['cbLVB', 'cbTieA'],
+        breakerNames: () => 'Sub B HV Breaker + 52-LVB',
+        upstreamDevices: () => ['87T-TR02 Diff (0.025 s)', '50/51-LVB', '51-HV (Sub B)'],
+        tccKeys: ['diff', 'lv', 'topo'], refSide: 'lv', xrRatio: 11.5,
+        defaultPos: (L) => ({ x: L.fdrGantryX + 415.0, y: 4.4, z: L.fdr1Z })
+      },
+      node19_subb_lv: {
+        id: 'node19_subb_lv', group: 'Tie Substation B',
+        name: 'Node 19: Tie Substation B 13.8 kV Main Bus B',
+        zone: 'ANSI 50/51-LVB Secondary Bus Overcurrent',
+        breakers: ['cbLVB'],
+        breakerNames: () => '52-LVB (Sub B Main VCB — East loads ready for Sub A back-feed)',
+        upstreamDevices: () => ['50/51-LVB Main', '51-HV (Sub B)'],
+        tccKeys: ['lv', 'topo'], refSide: 'lv', xrRatio: 10.2,
+        defaultPos: (L) => ({ x: L.fdrGantryX + 395.0, y: 4.5, z: L.fdr1Z })
+      },
+      node20_fdr3: {
+        id: 'node20_fdr3', group: 'Tie Substation B',
+        name: 'Node 20: Tie Substation B Feeder 03 Head (52-F3)',
+        zone: 'ANSI 50/51-F3 Feeder Overcurrent + 51N',
+        breakers: ['cbF3'],
+        breakerNames: () => '52-F3 ONLY (52-F4 stays live)',
+        upstreamDevices: () => ['50/51-F3', '50/51-LVB Main', '51-HV (Sub B)'],
+        tccKeys: ['fdr', 'lv', 'topo'], refSide: 'lv', xrRatio: 6.2, defaultDistPct: 25,
+        defaultPos: (L) => ({ x: L.fdrGantryX + 382.0, y: 4.5, z: L.fdr1Z })
+      },
+      node21_fdr4: {
+        id: 'node21_fdr4', group: 'Tie Substation B',
+        name: 'Node 21: Tie Substation B Feeder 04 Head (52-F4)',
+        zone: 'ANSI 50/51-F4 Feeder Overcurrent + 51N',
+        breakers: ['cbF4'],
+        breakerNames: () => '52-F4 ONLY (52-F3 stays live)',
+        upstreamDevices: () => ['50/51-F4', '50/51-LVB Main', '51-HV (Sub B)'],
+        tccKeys: ['fdr', 'lv', 'topo'], refSide: 'lv', xrRatio: 6.0, defaultDistPct: 25,
+        defaultPos: (L) => ({ x: L.fdrGantryX + 382.0, y: 4.5, z: L.fdr2Z })
       }
     };
 
@@ -1917,7 +2601,7 @@ def get_js_app_core():
         btnExp.innerText = AppState.pinpointFaultMode ? '🎯 Click SLD Node to Inject Fault (ON)' : '🎯 Pinpoint Fault Mode (SLD)';
       }
       if (AppState.pinpointFaultMode) {
-        showToast('Pinpoint Fault Mode ACTIVE: Click any 3D equipment/bus or any SLD node to inject a fault.');
+        showToast('Pinpoint Fault Mode ACTIVE: Click any 3D equipment/bus or any of 23 SLD nodes to inject a fault.');
       }
     }
 
@@ -1932,10 +2616,44 @@ def get_js_app_core():
       } else if (compId === 'transformer') {
         const splitX = L.txX + 0.1;
         nodeId = (hitPoint && hitPoint.x > splitX) ? 'node4_tx_lv' : 'node3_tx_hv';
-      } else if (compId === 'secondary' || compId === 'auxiliary') {
+      } else if (compId === 'secondary' || compId === 'auxiliary' || compId === 'sst_100') {
         nodeId = (circuitTag === 'sec_lv' && hitPoint && hitPoint.x < L.secCbX) ? 'node4_tx_lv' : 'node5_lv_bus';
-      } else if (compId === 'feeders' || circuitTag === 'fdr1' || circuitTag === 'fdr2') {
-        const useFdr2 = circuitTag === 'fdr2' || (hitPoint && Math.abs(hitPoint.z - L.fdr2Z) < Math.abs(hitPoint.z - L.fdr1Z));
+      } else if (compId === 'ind_hv_bay') {
+        nodeId = 'node7_ind_hv'; distPct = 40;
+      } else if (compId === 'dt_ind_1500' || (circuitTag === 'ind_hv' && hitPoint && hitPoint.x > L.fdrGantryX + 60)) {
+        nodeId = 'node8_ind_sub'; distPct = 100;
+      } else if (circuitTag === 'ind_hv') {
+        nodeId = 'node7_ind_hv'; distPct = 40;
+      } else if (compId === 'dist_recloser') {
+        nodeId = 'node9_acr1'; distPct = 50;
+      } else if (compId === 'dt_res_50' || compId === 'dist_fuse_cutout' || circuitTag === 'dist_lateral') {
+        nodeId = 'node10_res_lat'; distPct = 75;
+      } else if (compId === 'dt_urd_pad' || compId === 'urd_riser_pole' || compId === 'urd_vista_swgr' || compId === 'dist_sectionalizer') {
+        nodeId = 'node11_urd_pad'; distPct = 65;
+      } else if (compId === 'dt_com_750') {
+        nodeId = 'node12_cbd_bus'; distPct = 80;
+      } else if (compId === 'dt_uni_500') {
+        nodeId = 'node15_uni_bus'; distPct = 85;
+      } else if (compId === 'dt_mun_1000') {
+        nodeId = 'node16_mun_bus'; distPct = 85;
+      } else if (compId === 'substation_b' || compId === 'substation_gate') {
+        if (hitPoint && hitPoint.x < L.fdrGantryX + 260) {
+          nodeId = 'node13_tie1';
+        } else if (circuitTag === 'dist_f3') {
+          nodeId = 'node20_fdr3';
+        } else if (circuitTag === 'dist_f4') {
+          nodeId = 'node21_fdr4';
+        } else if (circuitTag === 'dist_sub_b') {
+          nodeId = (hitPoint && hitPoint.x > L.fdrGantryX + 410) ? 'node17_subb_hv' : 'node18_tr02';
+        } else {
+          nodeId = 'node19_subb_lv';
+        }
+      } else if (circuitTag === 'dist_f3') {
+        nodeId = 'node20_fdr3'; distPct = 50;
+      } else if (circuitTag === 'dist_f4') {
+        nodeId = 'node21_fdr4'; distPct = 50;
+      } else if (compId === 'feeders' || circuitTag === 'fdr1' || circuitTag === 'fdr2' || circuitTag === 'dist_f1_sec1' || circuitTag === 'dist_f1_sec2' || circuitTag === 'dist_f2_main') {
+        const useFdr2 = circuitTag === 'fdr2' || circuitTag === 'dist_f2_main' || (hitPoint && Math.abs(hitPoint.z - L.fdr2Z) < Math.abs(hitPoint.z - L.fdr1Z));
         nodeId = useFdr2 ? 'node6_fdr2' : 'node6_fdr1';
         if (hitPoint) {
           const span = Math.max(6.0, L.fdrGantryX - L.secBusX);
@@ -1975,10 +2693,46 @@ def get_js_app_core():
       faultMarker3D = grp;
     }
 
+    window.plotActiveFaultOnTcc = function(optNodeId) {
+      const targetNode = optNodeId || AppState.scFaultLoc || AppState.pinpointFaultNode || 'node5_lv_bus';
+      AppState.scFaultLoc = targetNode;
+      AppState.pinpointFaultNode = targetNode;
+      const meta = PINPOINT_FAULT_NODES[targetNode] || PINPOINT_FAULT_NODES.node5_lv_bus;
+      const sc = computeShortCircuitMetrics();
+      const vs = sc.vs;
+      const refSide = meta.refSide || (sc.vBaseKv > 40 ? 'hv' : 'lv');
+      const ampAtRef = (refSide === 'hv' && sc.vBaseKv < vs.hvKv)
+        ? Math.round((sc.iSymKa * 1000) * (sc.vBaseKv / vs.hvKv))
+        : ((refSide === 'lv' && sc.vBaseKv > vs.lvKv)
+          ? Math.round((sc.iSymKa * 1000) * (sc.vBaseKv / vs.hvKv) * (vs.hvKv / (vs.distKv || 13.8)))
+          : Math.round(sc.iSymKa * 1000));
+
+      if (AppState.tccState) {
+        AppState.tccState.topo = AppState.busTopology || AppState.tccState.topo || 'single';
+        AppState.tccState.refSide = refSide;
+        AppState.tccState.cursorAmp = Math.max(40, Math.min(90000, ampAtRef || 4200));
+        AppState.tccState.focusedRelay = (meta.tccKeys && meta.tccKeys[0] === 'fdr') ? '50_51_f1' : ((meta.tccKeys && meta.tccKeys[0] === 'recFast') ? 'recloser' : 'all');
+        AppState.tccState.viewMode = 'highlight';
+        AppState.tccState.pinnedFault = {
+          nodeId: meta.id,
+          nodeLabel: meta.name,
+          faultType: AppState.scFaultType || '3ph',
+          iSymKa: sc.iSymKa,
+          iPeakKa: sc.iPeakKa,
+          iAmpsPlot: AppState.tccState.cursorAmp,
+          vBaseKv: sc.vBaseKv,
+          upstreamDevices: sc.upstreamDevices || [],
+          highlightKeys: meta.tccKeys || ['fdr', 'lv', 'topo']
+        };
+      }
+      openAnalysisModal('tcc');
+      showToast(`📈 Plotted ${meta.name} (I_f = ${sc.iSymKa.toFixed(2)} kA @ ${sc.vBaseKv} kV) on TCC Coordination Graph!`);
+    };
+
     function updatePinpointFaultReadout(nodeId, sc, trippedListTxt, vs, meta) {
       const ro = document.getElementById('pinpoint-fault-readout');
       if (!ro) return;
-      const isFdr = (nodeId === 'node6_fdr1' || nodeId === 'node6_fdr2');
+      const isFdr = (nodeId === 'node6_fdr1' || nodeId === 'node6_fdr2' || nodeId === 'node9_acr1' || nodeId === 'node10_res_lat' || nodeId === 'node11_urd_pad' || nodeId === 'node12_cbd_bus' || nodeId === 'node15_uni_bus' || nodeId === 'node16_mun_bus');
       const d = AppState.pinpointFeederDistPct || 50;
       const sliderHtml = isFdr ? `
         <div style="margin-top:6px; padding-top:5px; border-top:1px solid rgba(248,113,113,0.3);">
@@ -1990,10 +2744,13 @@ def get_js_app_core():
         </div>` : '';
       ro.innerHTML = `
         <div style="color:#f87171; font-weight:700; margin-bottom:2px;">⚡ FAULT: ${meta.name} (${sc.vBaseKv} kV)</div>
-        <div>I<sub>f,sym</sub>: <strong style="color:#fef08a;">${sc.iSymKa.toFixed(2)} kA</strong> | I<sub>peak</sub>: <strong>${sc.iPeakKa.toFixed(2)} kA</strong></div>
+        <div>I<sub>f,sym</sub>: <strong style="color:#fef08a;">${sc.iSymKa.toFixed(2)} kA</strong> | I<sub>peak</sub>: <strong>${sc.iPeakKa.toFixed(2)} kA</strong> | X/R: <strong>${(sc.xrRatio || 10).toFixed(1)}</strong></div>
         <div>Zone: <span style="color:#67e8f9;">${meta.zone}</span></div>
         <div>Tripped: <span style="color:#fde68a;">${trippedListTxt}</span></div>
         ${sliderHtml}
+        <button class="btn" style="width:100%; justify-content:center; margin-top:6px; padding:4px 8px; font-size:10px; background:rgba(250,204,21,0.18); border-color:#facc15; color:#fef08a;" onclick="plotActiveFaultOnTcc('${meta.id}')">
+          📈 Plot This Fault on TCC Coordination Graph
+        </button>
       `;
     }
 
@@ -2002,8 +2759,8 @@ def get_js_app_core():
       const L = getBusLayoutConfig(AppState.busTopology, AppState.enclosureType, AppState.voltageClass);
       const vs = getVoltageSpec(AppState.voltageClass);
       const top = AppState.busTopology || 'single';
+      const br = computeEnergizedBranches();
 
-      // Re-close switches first only if not keeping prior isolation? Ensure clean test by keeping other breakers unaffected and clearing only zone breakers
       AppState.pinpointFaultNode = meta.id;
       AppState.pinpointFeederDistPct = distPct;
       AppState.scFaultLoc = meta.id;
@@ -2016,14 +2773,25 @@ def get_js_app_core():
 
       const sc = computeShortCircuitMetrics();
       if (AppState.tccState) {
-        const isHvFault = (meta.id === 'node1_incoming' || meta.id === 'node2_hv_bus' || meta.id === 'node3_tx_hv');
+        const isHvFault = (meta.refSide === 'hv');
         AppState.tccState.refSide = isHvFault ? 'hv' : 'lv';
         AppState.tccState.cursorAmp = Math.max(80, Math.min(85000, Math.round(sc.iSymKa * 1000)));
         AppState.tccState.topo = top;
+        AppState.tccState.pinnedFault = {
+          nodeId: meta.id,
+          nodeLabel: meta.name,
+          faultType: AppState.scFaultType || '3ph',
+          iSymKa: sc.iSymKa,
+          iPeakKa: sc.iPeakKa,
+          iAmpsPlot: AppState.tccState.cursorAmp,
+          vBaseKv: sc.vBaseKv,
+          upstreamDevices: sc.upstreamDevices || [],
+          highlightKeys: meta.tccKeys || ['fdr', 'lv', 'topo']
+        };
       }
       const stEl = document.getElementById('telem-grid-status');
       const iEl = document.getElementById('telem-current');
-      if (stEl) { stEl.innerText = `FAULT: ${meta.name.split(' ')[0].toUpperCase()}`; stEl.style.color = '#ef4444'; }
+      if (stEl) { stEl.innerText = `FAULT: ${meta.name.split(':')[0].toUpperCase()}`; stEl.style.color = '#ef4444'; }
       if (iEl) iEl.innerText = `${(sc.iSymKa * 1000).toFixed(0)} A`;
 
       if (dynamicArcLight) {
@@ -2035,7 +2803,7 @@ def get_js_app_core():
         soundEngine.playNoiseBurst(0.35, 0.75);
       }
 
-      const trippedListTxt = meta.breakerNames(top);
+      const trippedListTxt = meta.breakerNames(top, br);
       updatePinpointFaultReadout(meta.id, sc, trippedListTxt, vs, meta);
       renderLiveSLD();
 
@@ -2049,7 +2817,12 @@ def get_js_app_core():
             .filter(item => item.topologies.includes(top))
             .map(item => item.id)
         );
-        meta.breakers.forEach(swKey => {
+        // Adapt East load breaker tripping if back-fed from Substation A via closed ties
+        let clearBreakers = meta.breakers.slice();
+        if (meta.id === 'node15_uni_bus' && br.fdr3_from_subA) clearBreakers = ['cbTieB'];
+        if (meta.id === 'node16_mun_bus' && br.fdr4_from_subA) clearBreakers = ['cbTie2'];
+        if (meta.id === 'node10_res_lat' && br.fdr1_from_subB) clearBreakers = ['fuseCutout'];
+        clearBreakers.forEach(swKey => {
           if (Object.prototype.hasOwnProperty.call(AppState.switchStates, swKey) && (activeMetaIds.size === 0 || activeMetaIds.has(swKey))) {
             AppState.switchStates[swKey] = false;
           }
@@ -2181,6 +2954,18 @@ def get_js_app_core():
       showToast(`IEEE Std 80 Ground Grid X-Ray: ${enabled ? 'VISIBLE (Legend Enabled)' : 'HIDDEN'}`);
     }
 
+    function toggleUrdTrenchXray(enabled) {
+      AppState.urdXrayActive = !!enabled;
+      const dist = switchyardObjects.distribution;
+      if (dist && dist.userData && dist.userData.urdTrenchGroup) {
+        dist.userData.urdTrenchGroup.visible = AppState.urdXrayActive;
+      }
+      if (typeof rebuildPowerFlowPaths === 'function') {
+        rebuildPowerFlowPaths();
+      }
+      showToast(`URD Underground 15 kV Cable Trench X-Ray: ${AppState.urdXrayActive ? 'VISIBLE' : 'HIDDEN (Pavement Covered)'}`);
+    }
+
     function toggleRollingSphere(enabled) {
       AppState.rollingSphereActive = enabled;
       if (switchyardObjects.rollingSphere) {
@@ -2304,7 +3089,7 @@ def get_js_app_core():
       };
 
       // 1. TR-01 Main Power Transformer Tank & Oil Containment Berm Wall
-      addBox(L.txX, L.txZ, 8.8, 14.8, 'TR-01 Oil Berm');
+      addBox(L.txX, L.txZ, L.voltageClass === '500_230' ? 10.2 : 8.8, L.voltageClass === '500_230' ? 24.4 : 14.8, 'TR-01 Oil Berm');
 
       // 2. SST-100 Fenced Enclosure & Concrete Blast Wall
       addBox(L.sstX, L.sstZ, 6.0, 5.9, 'SST-100 Fire Barrier & Enclosure');
@@ -2416,23 +3201,68 @@ def get_js_app_core():
         pushBox3(b.minX, b.maxX, b.minZ, b.maxZ, b.label, (isDoorwayWall || isInterior) ? 0.28 : padRadius);
       });
 
-      // 2. Perimeter Chain-Link Fence Colliders around all 4 yard boundaries
+      // 2. Perimeter Chain-Link Fence Colliders (Split at Functional Vehicular Entrance Gates A & B)
       const yb = AppState.yardBounds || { minX: -30, maxX: 52, minZ: -24, maxZ: 24 };
-      pushBox3(yb.minX - 0.4, yb.maxX + 0.4, yb.minZ - 0.4, yb.minZ + 0.05, 'North Perimeter Fence', padRadius);
-      pushBox3(yb.minX - 0.4, yb.maxX + 0.4, yb.maxZ - 0.05, yb.maxZ + 0.4, 'South Perimeter Fence', padRadius);
-      pushBox3(yb.minX - 0.4, yb.minX + 0.05, yb.minZ - 0.4, yb.maxZ + 0.4, 'West Perimeter Fence', padRadius);
-      pushBox3(yb.maxX - 0.05, yb.maxX + 0.4, yb.minZ - 0.4, yb.maxZ + 0.4, 'East Perimeter Fence', padRadius);
+      const envUD = switchyardObjects.env && switchyardObjects.env.userData ? switchyardObjects.env.userData : {};
+      const fMinX = L ? (L.yardCenterX - L.yardW / 2) : (yb.minX - 2.0);
+      const fMaxX = L ? (L.yardCenterX + L.yardW / 2) : (yb.maxX + 2.0);
+      const fMinZ = L ? (L.yardCenterZ - L.yardL / 2) : (yb.minZ - 2.0);
+      const fMaxZ = (envUD.gateZ !== undefined) ? envUD.gateZ : (L ? (L.yardCenterZ + L.yardL / 2) : (yb.maxZ + 2.0));
+      const defaultGateAX = Math.max(fMinX + 8.0, Math.min(fMaxX - 8.0, (L ? L.txX : 2.0) - 7.5));
+      const aGapMin = envUD.gateGapMinX !== undefined ? envUD.gateGapMinX : (defaultGateAX - 5.0);
+      const aGapMax = envUD.gateGapMaxX !== undefined ? envUD.gateGapMaxX : (defaultGateAX + 3.6);
+      pushBox3(fMinX - 0.4, fMaxX + 0.4, fMinZ - 0.4, fMinZ + 0.05, 'North Perimeter Fence (Sub A)', padRadius);
+      pushBox3(fMinX - 0.4, aGapMin, fMaxZ - 0.4, fMaxZ + 0.4, 'South Perimeter Fence Left (Sub A)', padRadius);
+      pushBox3(aGapMax, fMaxX + 0.4, fMaxZ - 0.4, fMaxZ + 0.4, 'South Perimeter Fence Right (Sub A)', padRadius);
+      if (!AppState.gateAOpen) {
+        pushBox3(aGapMin, aGapMax, fMaxZ - 0.35, fMaxZ + 0.35, 'Substation A Closed Entrance Gate', padRadius);
+      }
+      pushBox3(fMinX - 0.4, fMinX + 0.05, fMinZ - 0.4, fMaxZ + 0.4, 'West Perimeter Fence (Sub A)', padRadius);
+      pushBox3(fMaxX - 0.05, fMaxX + 0.4, fMinZ - 0.4, fMaxZ + 0.4, 'East Perimeter Fence (Sub A)', padRadius);
+
+      // 2b. Full-Scale Tie Substation B Perimeter Fence, Closed Gate B & Key Solid Structures
+      const distUD = switchyardObjects.distribution && switchyardObjects.distribution.userData ? switchyardObjects.distribution.userData : null;
+      if (distUD && distUD.subBLayout) {
+        const LB = distUD.subBLayout;
+        const sbX = distUD.subBOriginX;
+        const sbZ = distUD.subBOriginZ;
+        const bMinX = sbX - LB.yardMaxX;
+        const bMaxX = sbX - LB.yardMinX;
+        const bMinZ = sbZ - LB.yardMaxZ;
+        const bMaxZ = sbZ - LB.yardMinZ; // World South-facing highway perimeter of Sub B
+        const subBEnvUD = distUD.subBEnv && distUD.subBEnv.userData ? distUD.subBEnv.userData : {};
+        const localGapMin = subBEnvUD.gateGapMinX !== undefined ? subBEnvUD.gateGapMinX : ((LB.txX - 7.5) - 3.6);
+        const localGapMax = subBEnvUD.gateGapMaxX !== undefined ? subBEnvUD.gateGapMaxX : ((LB.txX - 7.5) + 5.0);
+        const sbGapMin = sbX - localGapMax;
+        const sbGapMax = sbX - localGapMin;
+
+        pushBox3(bMinX - 0.4, bMaxX + 0.4, bMinZ - 0.4, bMinZ + 0.05, 'North Perimeter Fence (Sub B)', padRadius);
+        pushBox3(bMinX - 0.4, sbGapMin, bMaxZ - 0.4, bMaxZ + 0.4, 'South Perimeter Fence Left (Sub B)', padRadius);
+        pushBox3(sbGapMax, bMaxX + 0.4, bMaxZ - 0.4, bMaxZ + 0.4, 'South Perimeter Fence Right (Sub B)', padRadius);
+        if (!AppState.gateBOpen) {
+          pushBox3(sbGapMin, sbGapMax, bMaxZ - 0.35, bMaxZ + 0.35, 'Substation B Closed Entrance Gate', padRadius);
+        }
+        pushBox3(bMinX - 0.4, bMinX + 0.05, bMinZ - 0.4, bMaxZ + 0.4, 'West Perimeter Fence (Sub B)', padRadius);
+        pushBox3(bMaxX - 0.05, bMaxX + 0.4, bMinZ - 0.4, bMaxZ + 0.4, 'East Perimeter Fence (Sub B)', padRadius);
+        pushBox3(sbX - LB.txX - 4.2, sbX - LB.txX + 4.2, sbZ - LB.txZ - 6.5, sbZ - LB.txZ + 6.5, 'Substation B TR-02 Transformer Pad', padRadius);
+        pushBox3(sbX - LB.ctrlX - 4.2, sbX - LB.ctrlX + 4.2, sbZ - LB.ctrlZ - 5.4, sbZ - LB.ctrlZ + 5.4, 'Substation B Control House', padRadius);
+      }
+      if (!AppState.cityGateOpen && distUD && distUD.cityGateX !== undefined) {
+        const cgZ = distUD.cityGateZ !== undefined ? distUD.cityGateZ : (L ? L.yardMaxZ + 11.5 : 35);
+        pushBox3(distUD.cityGateX - 0.8, distUD.cityGateX + 0.8, cgZ - 6.2, cgZ + 6.2, 'City Utility Gate Barrier (Press [E] or Click to Raise)', 0.35);
+      }
 
       // 3. Traverse 3D switchyard equipment meshes and compute world-space THREE.Box3 colliders expanded by 0.55 m
       if (!scene) return;
       scene.updateMatrixWorld(true);
-      const equipKeys = ['gantry', 'arrester', 'ctvt', 'disconnect', 'breaker', 'transformer', 'busbar', 'auxiliary', 'secondary', 'feeders'];
+      const equipKeys = ['gantry', 'arrester', 'ctvt', 'disconnect', 'breaker', 'transformer', 'busbar', 'auxiliary', 'secondary', 'feeders', 'ind_hv_bay', 'urd_vista_swgr', 'dt_urd_pad', 'dt_com_750', 'dt_uni_500', 'dt_mun_1000', 'dt_ind_1500'];
       equipKeys.forEach(k => {
         const root = switchyardObjects[k];
         if (!root || !root.visible) return;
         root.updateMatrixWorld(true);
         root.traverse(obj => {
           if (!obj.isMesh || !obj.visible) return;
+          if (obj.userData && obj.userData.noCollider) return;
           let p = obj.parent;
           while (p && p !== scene) {
             if (!p.visible) return;
@@ -2460,9 +3290,10 @@ def get_js_app_core():
       });
     }
 
+    const WORLD_WALK_BOUNDS = { minX: -340, maxX: 1150, minZ: -320, maxZ: 320 };
+
     function isPointBlockedBySolidColliders(x, z, y = 1.4) {
-      const yb = AppState.yardBounds || { minX: -30, maxX: 52, minZ: -24, maxZ: 24 };
-      if (x <= yb.minX + 0.55 || x >= yb.maxX - 0.55 || z <= yb.minZ + 0.55 || z >= yb.maxZ - 0.55) {
+      if (x <= WORLD_WALK_BOUNDS.minX + 0.55 || x >= WORLD_WALK_BOUNDS.maxX - 0.55 || z <= WORLD_WALK_BOUNDS.minZ + 0.55 || z >= WORLD_WALK_BOUNDS.maxZ - 0.55) {
         return true;
       }
       const testPt = new THREE.Vector3(x, y, z);
@@ -2476,9 +3307,8 @@ def get_js_app_core():
 
     function resolveWalkCollision(nextX, nextZ, radius = 0.55) {
       let x = nextX, z = nextZ;
-      const yb = AppState.yardBounds;
-      x = Math.max(yb.minX + radius, Math.min(yb.maxX - radius, x));
-      z = Math.max(yb.minZ + radius, Math.min(yb.maxZ - radius, z));
+      x = Math.max(WORLD_WALK_BOUNDS.minX + radius, Math.min(WORLD_WALK_BOUNDS.maxX - radius, x));
+      z = Math.max(WORLD_WALK_BOUNDS.minZ + radius, Math.min(WORLD_WALK_BOUNDS.maxZ - radius, z));
 
       const boxes = AppState.collisionBoxes || [];
       for (let pass = 0; pass < 2; pass++) {
@@ -2828,10 +3658,19 @@ def get_js_app_core():
           break;
         }
 
+        if ((actionTag === 'toggleGateA' || actionTag === 'toggleGateB') && hit.distance <= 8.5) {
+          focused = { type: 'gate', gateId: actionTag === 'toggleGateB' ? 'B' : 'A', dist: hit.distance };
+          break;
+        }
+        if (actionTag === 'toggleCityGate' && hit.distance <= 10.5) {
+          focused = { type: 'city_gate', dist: hit.distance };
+          break;
+        }
+
         if (inSpanningBusbar && hasFlowCurve) continue;
 
         if (compId && SUBSTATION_DATA[compId] && compId !== 'ground') {
-          const isIndoorLowV = (compId === 'auxiliary' || compId === 'control');
+          const isIndoorLowV = (compId === 'auxiliary' || compId === 'control' || compId === 'substation_gate' || compId === 'city_gate');
           const safeMin = isIndoorLowV ? 0.5 : (mad * 0.72);
           if (hit.distance >= safeMin && hit.distance <= 10.5) {
             focused = { type: 'equipment', compId, dist: hit.distance };
@@ -2854,6 +3693,13 @@ def get_js_app_core():
       } else if (focused.type === 'relay_tcc') {
         promptEl.classList.add('scada-focus');
         promptEl.innerHTML = `<span class="walk-key-badge">[E] / Click</span> <span>🛡️ <strong>Protection Relay Rack</strong> (${focused.dist.toFixed(1)} m — SAFE) — Open Relay Settings &amp; TCC Lab</span>`;
+      } else if (focused.type === 'gate') {
+        promptEl.classList.add('scada-focus');
+        const isOpenNow = (focused.gateId === 'B') ? AppState.gateBOpen : AppState.gateAOpen;
+        promptEl.innerHTML = `<span class="walk-key-badge">[E] / Click</span> <span>🚧 <strong>Security Entrance Gate ${focused.gateId}</strong> (${focused.dist.toFixed(1)} m) — Swing ${isOpenNow ? 'CLOSED' : 'OPEN (Walk Access)'}</span>`;
+      } else if (focused.type === 'city_gate') {
+        promptEl.classList.add('scada-focus');
+        promptEl.innerHTML = `<span class="walk-key-badge">[E] / Click</span> <span>🚧 <strong>Utility District &amp; URD City Gate</strong> (${focused.dist.toFixed(1)} m) — ${AppState.cityGateOpen ? 'Lower Barrier CLOSED' : 'Raise Barrier OPEN'}</span>`;
       } else {
         promptEl.classList.remove('scada-focus');
         const eqName = SUBSTATION_DATA[focused.compId].name;
@@ -2865,6 +3711,19 @@ def get_js_app_core():
       if (!AppState.isWalkMode || AppState.isHazardModalLocked) return;
       const target = AppState.walkFocusedTarget;
       if (!target) return;
+
+      if (target.type === 'gate') {
+        toggleSubstationGate(target.gateId);
+        selectComponent('substation_gate', false);
+        updateWalkInspectionReticle();
+        return;
+      }
+      if (target.type === 'city_gate') {
+        toggleSubstationGate('city');
+        selectComponent('city_gate', false);
+        updateWalkInspectionReticle();
+        return;
+      }
 
       WalkState.moveForward = WalkState.moveBackward = WalkState.moveLeft = WalkState.moveRight = false;
       WalkState.isMouseDown = false;
@@ -2890,7 +3749,10 @@ def get_js_app_core():
     function applySldExpTransform() {
       const grp = document.getElementById('sld-exp-panzoom-group');
       if (grp) {
-        grp.setAttribute('transform', `translate(${AppState.sldPanX.toFixed(1)}, ${AppState.sldPanY.toFixed(1)}) scale(${AppState.sldZoom.toFixed(2)})`);
+        const z = AppState.sldZoom || 1.0;
+        const tx = (AppState.sldPanX || 0) + 440 * (1 - z);
+        const ty = (AppState.sldPanY || 0) + 124 * (1 - z);
+        grp.setAttribute('transform', `translate(${tx.toFixed(1)}, ${ty.toFixed(1)}) scale(${z.toFixed(2)})`);
       }
     }
 
@@ -2939,8 +3801,9 @@ def get_js_app_core():
       });
       window.addEventListener('mousemove', (e) => {
         if (!dragging || !AppState.sldExpOpen) return;
-        const dx = (e.clientX - startX) * (360 / Math.max(320, vp.clientWidth || 720));
-        const dy = (e.clientY - startY) * (192 / Math.max(200, vp.clientHeight || 400));
+        const z = AppState.sldZoom || 1.0;
+        const dx = ((e.clientX - startX) * (984 / Math.max(320, vp.clientWidth || 720))) / z;
+        const dy = ((e.clientY - startY) * (272 / Math.max(200, vp.clientHeight || 400))) / z;
         AppState.sldPanX = origPanX + dx;
         AppState.sldPanY = origPanY + dy;
         applySldExpTransform();
@@ -2996,16 +3859,19 @@ def get_js_app_core():
       showToast('Fault Cleared & System Reset: Relays (87B/87T/50/51/51N/21) Reset & Breakers Reclosed');
     }
 
-    function computeOrthogonalSldFaultPath(top, faultNode, s) {
+    function computeOrthogonalSldFaultPath(top, faultNode, s, bOpt) {
+      const b = bOpt || computeEnergizedBranches();
       let hvStem = 'M 12,24 L 95,24 L 95,122';
       let txInY = 122;
 
       if (top === 'single') {
         if (faultNode === 'node1_incoming') return 'M 12,24 L 58,24';
+        if (faultNode === 'node_cascade_mid') return 'M 12,24 L 34,24';
         if (faultNode === 'node2_hv_bus') return 'M 12,24 L 95,24';
         hvStem = 'M 12,24 L 95,24 L 95,122';
       } else if (top === 'maintransfer') {
         if (faultNode === 'node1_incoming') return 'M 12,24 L 58,24';
+        if (faultNode === 'node_cascade_mid') return 'M 12,24 L 34,24';
         if (faultNode === 'node2_hv_bus') return 'M 12,24 L 95,24';
         const bypActive = !!(s.dsBT && s.cbBT && s.dsBYP) && !s.cbMain;
         hvStem = bypActive
@@ -3013,6 +3879,7 @@ def get_js_app_core():
           : 'M 12,24 L 96,24 L 96,122';
       } else if (top === 'ring') {
         if (faultNode === 'node1_incoming') return 'M 8,80 L 18,80';
+        if (faultNode === 'node_cascade_mid') return 'M 8,80 L 24,80';
         if (faultNode === 'node2_hv_bus') return 'M 8,80 L 28,80 L 28,34 L 87,34';
         const northClosed = !!(s.cb1 && s.ds1A && s.ds1B && s.cb2 && s.ds2A && s.ds2B);
         hvStem = northClosed
@@ -3021,6 +3888,7 @@ def get_js_app_core():
       } else if (top === 'doublebreaker') {
         const busAPathOn = !!(s.cb1A && s.ds1A1 && s.ds1A2 && s.cb2A && s.ds2A1 && s.ds2A2);
         if (faultNode === 'node1_incoming') return 'M 6,92 L 36,92';
+        if (faultNode === 'node_cascade_mid') return 'M 6,92 L 24,92';
         if (faultNode === 'node2_hv_bus') {
           return busAPathOn ? 'M 6,92 L 52,92 L 52,24 L 88,24' : 'M 6,92 L 52,92 L 52,160 L 88,160';
         }
@@ -3030,16 +3898,58 @@ def get_js_app_core():
       } else {
         txInY = 115;
         if (faultNode === 'node1_incoming') return 'M 8,71 L 48,71';
+        if (faultNode === 'node_cascade_mid') return 'M 8,71 L 28,71';
         if (faultNode === 'node2_hv_bus') return 'M 8,71 L 88,71 L 88,26';
         hvStem = 'M 8,71 L 88,71 L 88,115';
       }
 
       if (faultNode === 'node3_tx_hv') return `${hvStem} L 174,${txInY}`;
+      if (faultNode === 'node7_ind_hv') return `${hvStem} L 166,122 L 166,198 L 264,198`;
+      if (faultNode === 'node8_ind_sub') return `${hvStem} L 166,122 L 166,198 L 317,198`;
+
       const txOutBridge = (txInY === 115) ? `L 210,115 L 210,122` : `L 210,122`;
+      const subAFdr1Base = `${hvStem} ${txOutBridge} L 278,122 L 278,82`;
+      const subAFdr2Base = `${hvStem} ${txOutBridge} L 278,122 L 278,152`;
+      const subBFdr1Base = `M 870,112 L 802,112 L 736,117 L 640,117 L 640,82`;
+      const subBFdr2Base = `M 870,112 L 802,112 L 736,117 L 640,117 L 640,152`;
+
       if (faultNode === 'node4_tx_lv') return `${hvStem} ${txOutBridge} L 214,122`;
       if (faultNode === 'node5_lv_bus') return `${hvStem} ${txOutBridge} L 278,122`;
-      if (faultNode === 'node6_fdr1') return `${hvStem} ${txOutBridge} L 278,122 L 278,68 L 348,68`;
-      if (faultNode === 'node6_fdr2') return `${hvStem} ${txOutBridge} L 278,122 L 278,112 L 348,112`;
+      if (faultNode === 'node6_fdr1') return `${subAFdr1Base} L 348,82`;
+      if (faultNode === 'node9_acr1') return `${subAFdr1Base} L 380,82`;
+      if (faultNode === 'node10_res_lat') {
+        return b.fdr1_from_subB ? `${subBFdr1Base} L 444,82 L 444,36` : `${subAFdr1Base} L 444,82 L 444,36`;
+      }
+      if (faultNode === 'node11_urd_pad') {
+        return b.fdr1_from_subB ? `${subBFdr1Base} L 402,82 L 402,114` : `${subAFdr1Base} L 402,82 L 402,114`;
+      }
+      if (faultNode === 'node6_fdr2') return `${subAFdr2Base} L 348,152`;
+      if (faultNode === 'node12_cbd_bus') {
+        return b.fdr2_from_subB ? `${subBFdr2Base} L 444,152 L 444,132` : `${subAFdr2Base} L 444,152 L 444,132`;
+      }
+      if (faultNode === 'node13_tie1') {
+        return b.fdr1_from_subB ? `${subBFdr1Base} L 482,82` : `${subAFdr1Base} L 482,82`;
+      }
+      if (faultNode === 'node14_tie2') {
+        return b.fdr2_from_subB ? `${subBFdr2Base} L 482,152` : `${subAFdr2Base} L 482,152`;
+      }
+      if (faultNode === 'node15_uni_bus') {
+        return b.fdr3_from_subA ? `${subAFdr1Base} L 532,82 L 532,36` : `${subBFdr1Base} L 532,82 L 532,36`;
+      }
+      if (faultNode === 'node16_mun_bus') {
+        return b.fdr4_from_subA ? `${subAFdr2Base} L 532,152 L 532,132` : `${subBFdr2Base} L 532,152 L 532,132`;
+      }
+      if (faultNode === 'node17_subb_hv') return 'M 870,112 L 802,112';
+      if (faultNode === 'node18_tr02') return 'M 870,112 L 802,112 L 725,117';
+      if (faultNode === 'node19_subb_lv') {
+        return (b.subB_lv_backfed_from_A && !b.dist_sub_b) ? `${subAFdr1Base} L 640,82 L 640,117` : 'M 870,112 L 736,117 L 640,117';
+      }
+      if (faultNode === 'node20_fdr3') {
+        return b.fdr3_from_subA ? `${subAFdr1Base} L 580,82` : `${subBFdr1Base} L 580,82`;
+      }
+      if (faultNode === 'node21_fdr4') {
+        return b.fdr4_from_subA ? `${subAFdr2Base} L 580,152` : `${subBFdr2Base} L 580,152`;
+      }
       return `${hvStem} ${txOutBridge} L 278,122`;
     }
 
@@ -3054,6 +3964,8 @@ def get_js_app_core():
       const s = AppState.switchStates;
       const b = computeEnergizedBranches();
       const vs = getVoltageSpec(AppState.voltageClass);
+      const distKv = vs.distKv || 13.8;
+      const indKv = vs.indSubKv || 69.0;
       const pf = (typeof computePowerFlowMetrics === 'function') ? computePowerFlowMetrics() : null;
       const swCol = (closed) => closed ? '#ef4444' : '#10b981';
       const hvCol = b.txFeed ? '#06b6d4' : '#64748b';
@@ -3061,6 +3973,7 @@ def get_js_app_core():
       const f1Col = b.fdr1 ? '#10b981' : '#64748b';
       const f2Col = b.fdr2 ? '#10b981' : '#64748b';
       const capCol = b.capBank ? '#2dd4bf' : '#64748b';
+      const indCol = b.ind_hv ? '#fbbf24' : '#64748b';
       const sel = AppState.selectedComponent;
       const top = AppState.busTopology || 'single';
 
@@ -3076,15 +3989,39 @@ def get_js_app_core():
         `;
       };
 
+      const sldBadge = (x, y, text, color, anchor = 'middle', fontSize = 4.9, bg = 'rgba(15,23,42,0.92)') => {
+        const w = Math.max(15, text.length * (fontSize * 0.62) + 4.5);
+        const h = fontSize + 3.4;
+        const rx = anchor === 'middle' ? (x - w / 2) : (anchor === 'end' ? (x - w) : x);
+        const ry = y - fontSize - 0.6;
+        return `<rect x="${rx.toFixed(1)}" y="${ry.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" rx="1.5" fill="${bg}" stroke="${color}" stroke-width="0.35" stroke-opacity="0.45"/><text x="${x}" y="${y}" fill="${color}" font-size="${fontSize}" text-anchor="${anchor}" font-weight="bold" font-family="monospace">${text}</text>`;
+      };
+
       const faultNode = (AppState.faultType && AppState.faultType !== 'none' && AppState.faultType !== 'lightning') ? AppState.pinpointFaultNode : null;
       const faultPosMap = {
         node1_incoming: top === 'ring' ? { x: 18, y: 80 } : (top === 'breakerhalf' ? { x: 48, y: 71 } : (top === 'doublebreaker' ? { x: 36, y: 92 } : { x: 58, y: 24 })),
+        node_cascade_mid: top === 'ring' ? { x: 24, y: 80 } : (top === 'breakerhalf' ? { x: 28, y: 71 } : (top === 'doublebreaker' ? { x: 24, y: 92 } : { x: 34, y: 24 })),
         node2_hv_bus: top === 'ring' ? { x: 87, y: 34 } : (top === 'breakerhalf' ? { x: 88, y: 26 } : (top === 'doublebreaker' ? { x: 88, y: 24 } : { x: 95, y: 24 })),
         node3_tx_hv: { x: 174, y: top === 'breakerhalf' ? 115 : 122 },
         node4_tx_lv: { x: 214, y: 122 },
         node5_lv_bus: { x: 278, y: 122 },
-        node6_fdr1: { x: 348, y: 68 },
-        node6_fdr2: { x: 348, y: 112 }
+        node7_ind_hv: { x: 264, y: 198 },
+        node8_ind_sub: { x: 317, y: 198 },
+        node6_fdr1: { x: 348, y: 82 },
+        node9_acr1: { x: 380, y: 82 },
+        node10_res_lat: { x: 444, y: 36 },
+        node11_urd_pad: { x: 402, y: 114 },
+        node6_fdr2: { x: 348, y: 152 },
+        node12_cbd_bus: { x: 444, y: 132 },
+        node13_tie1: { x: 482, y: 82 },
+        node14_tie2: { x: 482, y: 152 },
+        node15_uni_bus: { x: 532, y: 36 },
+        node16_mun_bus: { x: 532, y: 132 },
+        node17_subb_hv: { x: 802, y: 112 },
+        node18_tr02: { x: 725, y: 117 },
+        node19_subb_lv: { x: 640, y: 117 },
+        node20_fdr3: { x: 580, y: 82 },
+        node21_fdr4: { x: 580, y: 152 }
       };
 
       let primarySvg = '';
@@ -3202,18 +4139,18 @@ def get_js_app_core():
             <text x="146" y="75" fill="#fff" font-size="6.8" text-anchor="middle" font-family="monospace">52-2</text>
           </g>
           <g onclick="operateSwitch('ds2B')" style="cursor:pointer;"><text x="149" y="96" fill="${swCol(s.ds2B)}" font-size="5.5" font-family="monospace">89-2B</text></g>
-          <g onclick="operateSwitch('ds3A')" style="cursor:pointer;"><text x="40" y="140" fill="${swCol(s.ds3A)}" font-size="5.8" font-family="monospace">89-3A</text></g>
+          <g onclick="operateSwitch('ds3A')" style="cursor:pointer;">${sldBadge(54, 141, '89-3A', swCol(s.ds3A), 'middle', 5.1)}</g>
           <g onclick="operateSwitch('cb3')" style="cursor:pointer;">
             <rect x="75" y="119" width="24" height="14" rx="2" fill="${swCol(s.cb3)}" stroke="#fff"/>
             <text x="87" y="129" fill="#fff" font-size="6.8" text-anchor="middle" font-family="monospace">52-3</text>
           </g>
-          <g onclick="operateSwitch('ds3B')" style="cursor:pointer;"><text x="106" y="140" fill="${swCol(s.ds3B)}" font-size="5.8" font-family="monospace">89-3B</text></g>
-          <g onclick="operateSwitch('ds4A')" style="cursor:pointer;"><text x="8" y="54" fill="${swCol(s.ds4A)}" font-size="5.2" font-family="monospace">89-4A</text></g>
+          <g onclick="operateSwitch('ds3B')" style="cursor:pointer;">${sldBadge(118, 141, '89-3B', swCol(s.ds3B), 'middle', 5.1)}</g>
+          <g onclick="operateSwitch('ds4A')" style="cursor:pointer;">${sldBadge(22, 62, '89-4A', swCol(s.ds4A), 'end', 4.9)}</g>
           <g onclick="operateSwitch('cb4')" style="cursor:pointer;">
             <rect x="16" y="92" width="24" height="14" rx="2" fill="${swCol(s.cb4)}" stroke="#fff"/>
             <text x="28" y="102" fill="#fff" font-size="6.8" text-anchor="middle" font-family="monospace">52-4</text>
           </g>
-          <g onclick="operateSwitch('ds4B')" style="cursor:pointer;"><text x="8" y="118" fill="${swCol(s.ds4B)}" font-size="5.2" font-family="monospace">89-4B</text></g>
+          <g onclick="operateSwitch('ds4B')" style="cursor:pointer;">${sldBadge(22, 121, '89-4B', swCol(s.ds4B), 'end', 4.9)}</g>
           <line x1="146" y1="122" x2="176" y2="122" stroke="${hvCol}" stroke-width="2.2" ${b.txFeed ? '' : 'stroke-dasharray="3,2"'}/>
           <text x="148" y="116" fill="#f59e0b" font-size="5.5" font-family="monospace">${(c1&&c2)||(c3&&c4)?'CLOSED':'SPLIT'}</text>
         `;
@@ -3314,23 +4251,27 @@ def get_js_app_core():
       }
 
       const ngrTxt = AppState.scNgrGrounded ? `NGR ${vs.ngrOhms}Ω` : 'UNGRND';
+      const hasCascade = Array.isArray(vs.stageKvs) && vs.stageKvs.length > 2;
+      const cascadeHdr = hasCascade ? `CASCADE (${vs.hvKv}→${distKv} kV)` : `TR-01 (${vs.hvKv}/${distKv} kV)`;
+      const cascadeStageLine = hasCascade ? vs.stageKvs.join('→') + ' kV' : `${vs.mva} MVA ${vs.vectorGroup}`;
       const secondarySvg = `
-        <line x1="176" y1="8" x2="176" y2="190" stroke="rgba(148,163,184,0.22)" stroke-dasharray="3,3"/>
-        <text x="182" y="13" fill="#fbbf24" font-size="6.6" font-weight="bold" font-family="monospace">TR-01 &amp; ${vs.lvKv} kV SECONDARY</text>
+        <line x1="176" y1="8" x2="176" y2="216" stroke="rgba(148,163,184,0.22)" stroke-dasharray="3,3"/>
+        <text x="182" y="13" fill="#fbbf24" font-size="6.4" font-weight="bold" font-family="monospace">${cascadeHdr}</text>
 
         <g onclick="selectComponent('transformer', true)" style="cursor:pointer;">
           <circle cx="188" cy="122" r="8.5" fill="none" stroke="${sel==='transformer'?'#f59e0b':hvCol}" stroke-width="1.8"/>
           <circle cx="201" cy="122" r="8.5" fill="none" stroke="${sel==='transformer'?'#f59e0b':(b.txFeed?'#f59e0b':'#64748b')}" stroke-width="1.8"/>
           <text x="188" y="124.5" fill="#fff" font-size="6.5" text-anchor="middle" font-family="monospace">Δ</text>
           <text x="201" y="124.5" fill="#fff" font-size="6.5" text-anchor="middle" font-family="monospace">Y</text>
-          <text x="195" y="109" fill="#f59e0b" font-size="6.2" text-anchor="middle" font-weight="bold" font-family="monospace">TR-01</text>
+          <text x="195" y="109" fill="#f59e0b" font-size="6.0" text-anchor="middle" font-weight="bold" font-family="monospace">${hasCascade ? 'ATR+TR01' : 'TR-01'}</text>
         </g>
-        <text x="198" y="143" fill="#94a3b8" font-size="5.4" text-anchor="middle" font-family="monospace">${ngrTxt}</text>
+        <text x="198" y="142" fill="#fde68a" font-size="4.9" text-anchor="middle" font-family="monospace">${cascadeStageLine}</text>
+        ${sldBadge(198, 155, ngrTxt, '#94a3b8', 'middle', 4.7)}
 
         <line x1="210" y1="122" x2="278" y2="122" stroke="${b.secMain ? '#f59e0b' : (b.txFeed ? '#fb923c' : '#64748b')}" stroke-width="2" ${b.secMain ? '' : 'stroke-dasharray="3,2"'}/>
-        ${flowOverlay('M 210,122 L 278,122', '#fbbf24', b.secMain, 1.0)}
+        ${flowOverlay('M 210,122 L 278,122', '#fbbf24', b.secMain && !b.subA_lv_backfed_from_B, 1.0)}
         <g onclick="operateSwitch('dsLV')" style="cursor:pointer;">
-          <text x="220" y="114" fill="${swCol(s.dsLV)}" font-size="5.3" text-anchor="middle" font-weight="bold" font-family="monospace">89LVA</text>
+          ${sldBadge(219, 108, '89LVA', swCol(s.dsLV), 'middle', 4.8)}
           <circle cx="220" cy="122" r="2.2" fill="${swCol(s.dsLV)}"/>
         </g>
         <g onclick="operateSwitch('cbLV')" style="cursor:pointer;">
@@ -3338,67 +4279,91 @@ def get_js_app_core():
           <text x="243" y="123" fill="#fff" font-size="6.2" text-anchor="middle" font-weight="bold" font-family="monospace">52LV</text>
         </g>
         <g onclick="operateSwitch('dsLVB')" style="cursor:pointer;">
-          <text x="266" y="114" fill="${swCol(s.dsLVB)}" font-size="5.3" text-anchor="middle" font-weight="bold" font-family="monospace">89LVB</text>
+          ${sldBadge(266, 108, '89LVB', swCol(s.dsLVB), 'middle', 4.8)}
           <circle cx="266" cy="122" r="2.2" fill="${swCol(s.dsLVB)}"/>
         </g>
 
-        <line x1="278" y1="30" x2="278" y2="176" stroke="${secCol}" stroke-width="3.5" stroke-linecap="round" ${b.secMain ? '' : 'stroke-dasharray="4,3"'}/>
+        <line x1="278" y1="30" x2="278" y2="174" stroke="${secCol}" stroke-width="3.5" stroke-linecap="round" ${b.secMain ? '' : 'stroke-dasharray="4,3"'}/>
         ${flowOverlay('M 278,122 L 278,42', '#fbbf24', b.secMain, 0.9)}
         ${flowOverlay('M 278,122 L 278,158', '#fbbf24', b.secMain, 0.9)}
-        <text x="278" y="25" fill="${secCol}" font-size="6.0" text-anchor="middle" font-weight="bold" font-family="monospace">${vs.lvKv} kV BUS</text>
+        <text x="278" y="25" fill="${secCol}" font-size="6.0" text-anchor="middle" font-weight="bold" font-family="monospace">${distKv} kV BUS A</text>
 
         <line x1="278" y1="42" x2="244" y2="42" stroke="${secCol}" stroke-width="1.6" stroke-dasharray="3,2"/>
         ${flowOverlay('M 278,42 L 244,42', '#f59e0b', b.sst100, 0.85)}
         <rect x="208" y="34" width="36" height="15" rx="2" fill="rgba(30,41,59,0.9)" stroke="${secCol}"/>
         <text x="226" y="44" fill="#fde68a" font-size="5.8" text-anchor="middle" font-family="monospace">SST-100</text>
 
-        <line x1="278" y1="68" x2="354" y2="68" stroke="${f1Col}" stroke-width="2" ${b.fdr1 ? '' : 'stroke-dasharray="3,2"'}/>
-        ${flowOverlay('M 278,68 L 354,68', '#34d399', b.fdr1, 0.95)}
+        <!-- Feeder 01 (y = 82) -> North Loop -->
+        <line x1="278" y1="82" x2="354" y2="82" stroke="${b.fdr1_from_subB ? '#38bdf8' : f1Col}" stroke-width="2" ${b.fdr1 ? '' : 'stroke-dasharray="3,2"'}/>
+        ${flowOverlay(b.fdr1_from_subB ? 'M 354,82 L 278,82' : 'M 278,82 L 354,82', b.fdr1_from_subB ? '#38bdf8' : '#34d399', b.fdr1, 0.95)}
         <g onclick="operateSwitch('dsF1A')" style="cursor:pointer;">
-          <text x="291" y="61" fill="${swCol(s.dsF1A)}" font-size="5.2" text-anchor="middle" font-family="monospace">89F1A</text>
-          <circle cx="291" cy="68" r="2" fill="${swCol(s.dsF1A)}"/>
+          ${sldBadge(291, 73, '89F1A', swCol(s.dsF1A), 'middle', 4.7)}
+          <circle cx="291" cy="82" r="2" fill="${swCol(s.dsF1A)}"/>
         </g>
         <g onclick="operateSwitch('cbF1')" style="cursor:pointer;">
-          <rect x="301" y="60" width="22" height="15" rx="2" fill="${swCol(s.cbF1)}" stroke="#fff"/>
-          <text x="312" y="70" fill="#fff" font-size="6.1" text-anchor="middle" font-weight="bold" font-family="monospace">52-F1</text>
+          <rect x="301" y="74" width="22" height="15" rx="2" fill="${swCol(s.cbF1)}" stroke="#fff"/>
+          <text x="312" y="84" fill="#fff" font-size="6.0" text-anchor="middle" font-weight="bold" font-family="monospace">52-F1</text>
         </g>
         <g onclick="operateSwitch('dsF1B')" style="cursor:pointer;">
-          <text x="334" y="61" fill="${swCol(s.dsF1B)}" font-size="5.2" text-anchor="middle" font-family="monospace">89F1B</text>
-          <circle cx="334" cy="68" r="2" fill="${swCol(s.dsF1B)}"/>
+          ${sldBadge(334, 94, '89F1B', swCol(s.dsF1B), 'middle', 4.7)}
+          <circle cx="334" cy="82" r="2" fill="${swCol(s.dsF1B)}"/>
         </g>
-        <text x="355" y="77" fill="${f1Col}" font-size="5.8" text-anchor="end" font-weight="bold" font-family="monospace">FDR-01 ▶</text>
+        ${sldBadge(354, 73, b.fdr1_from_subB ? '◀ F1' : 'F1 ▶', b.fdr1_from_subB ? '#38bdf8' : f1Col, 'end', 5.0)}
 
-        <line x1="278" y1="112" x2="354" y2="112" stroke="${f2Col}" stroke-width="2" ${b.fdr2 ? '' : 'stroke-dasharray="3,2"'}/>
-        ${flowOverlay('M 278,112 L 354,112', '#34d399', b.fdr2, 0.95)}
-        <g onclick="operateSwitch('dsF2A')" style="cursor:pointer;">
-          <text x="291" y="105" fill="${swCol(s.dsF2A)}" font-size="5.2" text-anchor="middle" font-family="monospace">89F2A</text>
-          <circle cx="291" cy="112" r="2" fill="${swCol(s.dsF2A)}"/>
-        </g>
-        <g onclick="operateSwitch('cbF2')" style="cursor:pointer;">
-          <rect x="301" y="104" width="22" height="15" rx="2" fill="${swCol(s.cbF2)}" stroke="#fff"/>
-          <text x="312" y="114" fill="#fff" font-size="6.1" text-anchor="middle" font-weight="bold" font-family="monospace">52-F2</text>
-        </g>
-        <g onclick="operateSwitch('dsF2B')" style="cursor:pointer;">
-          <text x="334" y="105" fill="${swCol(s.dsF2B)}" font-size="5.2" text-anchor="middle" font-family="monospace">89F2B</text>
-          <circle cx="334" cy="112" r="2" fill="${swCol(s.dsF2B)}"/>
-        </g>
-        <text x="355" y="121" fill="${f2Col}" font-size="5.8" text-anchor="end" font-weight="bold" font-family="monospace">FDR-02 ▶</text>
-
-        <line x1="278" y1="158" x2="354" y2="158" stroke="${capCol}" stroke-width="1.8" ${b.capBank ? '' : 'stroke-dasharray="3,2"'}/>
-        ${flowOverlay('M 278,158 L 354,158', '#2dd4bf', b.capBank, 1.05)}
+        <!-- 52-CAP Switched Capacitor Bank (y = 117) -->
+        <line x1="278" y1="117" x2="354" y2="117" stroke="${capCol}" stroke-width="1.8" ${b.capBank ? '' : 'stroke-dasharray="3,2"'}/>
+        ${flowOverlay('M 278,117 L 354,117', '#2dd4bf', b.capBank, 1.05)}
         <g onclick="operateSwitch('dsCapA')" style="cursor:pointer;">
-          <text x="291" y="150" fill="${swCol(s.dsCapA)}" font-size="5.0" text-anchor="middle" font-family="monospace">89CA</text>
-          <circle cx="291" cy="158" r="2" fill="${swCol(s.dsCapA)}"/>
+          <text x="291" y="109" fill="${swCol(s.dsCapA)}" font-size="4.9" text-anchor="middle" font-family="monospace">89CA</text>
+          <circle cx="291" cy="117" r="2" fill="${swCol(s.dsCapA)}"/>
         </g>
         <g onclick="operateSwitch('cbCap')" style="cursor:pointer;">
-          <rect x="300" y="150" width="23" height="15" rx="2" fill="${swCol(s.cbCap)}" stroke="#fff"/>
-          <text x="311.5" y="160" fill="#fff" font-size="5.7" text-anchor="middle" font-family="monospace">52CAP</text>
+          <rect x="300" y="109" width="23" height="15" rx="2" fill="${swCol(s.cbCap)}" stroke="#fff"/>
+          <text x="311.5" y="119" fill="#fff" font-size="5.7" text-anchor="middle" font-family="monospace">52CAP</text>
         </g>
         <g onclick="operateSwitch('dsCapB')" style="cursor:pointer;">
-          <text x="333" y="150" fill="${swCol(s.dsCapB)}" font-size="5.0" text-anchor="middle" font-family="monospace">89CB</text>
-          <circle cx="333" cy="158" r="2" fill="${swCol(s.dsCapB)}"/>
+          <text x="333" y="109" fill="${swCol(s.dsCapB)}" font-size="4.9" text-anchor="middle" font-family="monospace">89CB</text>
+          <circle cx="333" cy="117" r="2" fill="${swCol(s.dsCapB)}"/>
         </g>
-        <text x="356" y="173" fill="${capCol}" font-size="5.5" text-anchor="end" font-family="monospace">${vs.capMvar} MVAR</text>
+        <text x="355" y="127" fill="${capCol}" font-size="4.9" text-anchor="end" font-family="monospace">${vs.capMvar}MVAR</text>
+
+        <!-- Feeder 02 (y = 152) -> South Loop -->
+        <line x1="278" y1="152" x2="354" y2="152" stroke="${b.fdr2_from_subB ? '#38bdf8' : f2Col}" stroke-width="2" ${b.fdr2 ? '' : 'stroke-dasharray="3,2"'}/>
+        ${flowOverlay(b.fdr2_from_subB ? 'M 354,152 L 278,152' : 'M 278,152 L 354,152', b.fdr2_from_subB ? '#38bdf8' : '#34d399', b.fdr2, 0.95)}
+        <g onclick="operateSwitch('dsF2A')" style="cursor:pointer;">
+          ${sldBadge(291, 143, '89F2A', swCol(s.dsF2A), 'middle', 4.7)}
+          <circle cx="291" cy="152" r="2" fill="${swCol(s.dsF2A)}"/>
+        </g>
+        <g onclick="operateSwitch('cbF2')" style="cursor:pointer;">
+          <rect x="301" y="144" width="22" height="15" rx="2" fill="${swCol(s.cbF2)}" stroke="#fff"/>
+          <text x="312" y="154" fill="#fff" font-size="6.0" text-anchor="middle" font-weight="bold" font-family="monospace">52-F2</text>
+        </g>
+        <g onclick="operateSwitch('dsF2B')" style="cursor:pointer;">
+          ${sldBadge(334, 164, '89F2B', swCol(s.dsF2B), 'middle', 4.7)}
+          <circle cx="334" cy="152" r="2" fill="${swCol(s.dsF2B)}"/>
+        </g>
+        ${sldBadge(354, 143, b.fdr2_from_subB ? '◀ F2' : 'F2 ▶', b.fdr2_from_subB ? '#38bdf8' : f2Col, 'end', 5.0)}
+
+        <!-- Dedicated 69/138 kV Industrial Sub-Transmission Tap (52-IND -> Customer Substation) -->
+        <path d="M 166,122 L 166,198 L 282,198" fill="none" stroke="${indCol}" stroke-width="2" ${b.ind_hv ? '' : 'stroke-dasharray="3,2"'}/>
+        ${flowOverlay('M 166,122 L 166,198 L 282,198', '#fbbf24', b.ind_hv, 1.0)}
+        <g onclick="operateSwitch('dsIndA')" style="cursor:pointer;">
+          <text x="192" y="190" fill="${swCol(s.dsIndA !== false)}" font-size="4.8" text-anchor="middle" font-family="monospace">89-INDA</text>
+          <circle cx="192" cy="198" r="2" fill="${swCol(s.dsIndA !== false)}"/>
+        </g>
+        <g onclick="operateSwitch('cbIndHv')" style="cursor:pointer;">
+          <rect x="205" y="190" width="26" height="15" rx="2" fill="${swCol(s.cbIndHv !== false)}" stroke="#fff"/>
+          <text x="218" y="200" fill="#fff" font-size="5.6" text-anchor="middle" font-weight="bold" font-family="monospace">52-IND</text>
+        </g>
+        <g onclick="operateSwitch('dsIndB')" style="cursor:pointer;">
+          <text x="246" y="190" fill="${swCol(s.dsIndB !== false)}" font-size="4.8" text-anchor="middle" font-family="monospace">89-INDB</text>
+          <circle cx="246" cy="198" r="2" fill="${swCol(s.dsIndB !== false)}"/>
+        </g>
+        <g onclick="selectComponent('dt_ind_1500', true)" style="cursor:pointer;">
+          <rect x="282" y="185" width="70" height="25" rx="2.5" fill="rgba(30,41,59,0.95)" stroke="${indCol}"/>
+          <text x="317" y="196" fill="${b.ind_hv ? '#fbbf24' : '#64748b'}" font-size="5.1" text-anchor="middle" font-weight="bold" font-family="monospace">52-CUST IND SUB</text>
+          <text x="317" y="205.5" fill="#cbd5e1" font-size="4.7" text-anchor="middle" font-family="monospace">${indKv}kV · ${vs.indCustMva || 25}MVA</text>
+        </g>
       `;
 
       // Interactive Pinpoint Fault Hotspots & Active Fault Surge Overlay
@@ -3413,19 +4378,19 @@ def get_js_app_core():
       let activeFaultSvg = '';
       if (faultNode && faultPosMap[faultNode]) {
         const fp = faultPosMap[faultNode];
-        const surgePath = computeOrthogonalSldFaultPath(top, faultNode, s);
+        const surgePath = computeOrthogonalSldFaultPath(top, faultNode, s, b);
         const scMeta = PINPOINT_FAULT_NODES[faultNode] || PINPOINT_FAULT_NODES.node5_lv_bus;
         const scRes = (typeof computeShortCircuitMetrics === 'function') ? computeShortCircuitMetrics() : null;
         const ftypeLabels = { '3ph': '3Φ SYMM (LLL)', 'slg': 'SLG (A-G)', 'll': 'L-L (B-C)', 'dlg': 'DLG (B-C-G)' };
         const ftText = ftypeLabels[AppState.scFaultType || '3ph'] || '3Φ SYMM';
         const shortLocName = scMeta.name.replace('Secondary Main Bus (13.8 kV)', `${vs.lvKv}kV Main Bus`).replace('Primary HV Bus Section', `${vs.hvKv}kV HV Bus`);
-        const trippers = scMeta.breakerNames ? scMeta.breakerNames(top) : '52';
+        const trippers = scMeta.breakerNames ? scMeta.breakerNames(top, b) : '52';
         const zoneTxt = (scMeta.zone || 'ANSI 50/51').split('+')[0].trim();
 
         const boxW = 114;
         const boxH = 38;
-        const boxX = Math.max(4, Math.min(360 - boxW - 4, fp.x > 210 ? (fp.x - boxW - 10) : (fp.x + 10)));
-        const boxY = Math.max(15, Math.min(174 - boxH, fp.y > 115 ? (fp.y - boxH - 4) : (fp.y + 8)));
+        const boxX = Math.max(-44, Math.min(924 - boxW, fp.x > 210 ? (fp.x - boxW - 10) : (fp.x + 10)));
+        const boxY = Math.max(-4, Math.min(222 - boxH, fp.y > 125 ? (fp.y - boxH - 4) : (fp.y + 8)));
 
         const line2 = scRes ? `If = ${scRes.iFaultPu.toFixed(2)} pu | ${scRes.iSymKa.toFixed(2)} kA sym` : 'If = COMPUTING';
         const line3 = scRes ? `Ipk = ${scRes.iPeakKa.toFixed(1)} kA | Ssc = ${scRes.sScMva.toFixed(0)} MVA` : '';
@@ -3447,21 +4412,356 @@ def get_js_app_core():
         `;
       }
 
-      const baseSvgInner = `${primarySvg}${secondarySvg}${hotspotsSvg}${activeFaultSvg}`;
+      // Extended Dual 13.8 kV Distribution Corridors & East-to-West Substation B Schematic (x = 356 .. 876, viewBox = 0 0 880 245)
+      const d1Col = b.dist_f1_sec1 ? (b.fdr1_from_subB ? '#38bdf8' : '#10b981') : '#64748b';
+      const d2Col = b.dist_f1_sec2 ? (b.fdr1_from_subB ? '#38bdf8' : '#10b981') : '#64748b';
+      const latCol = b.dist_lateral ? '#fbbf24' : '#64748b';
+      const d2mCol = b.dist_f2_main ? (b.fdr2_from_subB ? '#38bdf8' : '#10b981') : '#64748b';
+      const f3Col = b.dist_f3 ? (b.fdr3_from_subA ? '#38bdf8' : '#10b981') : '#64748b';
+      const f4Col = b.dist_f4 ? (b.fdr4_from_subA ? '#38bdf8' : '#10b981') : '#64748b';
+      const reverseFlisr = !!b.fdr1_from_subB;
+      const reverseSouthFlisr = !!b.fdr2_from_subB;
+      const eastBackfeed = !!(b.fdr3_from_subA || b.fdr4_from_subA);
+      const anyBackfeed = reverseFlisr || reverseSouthFlisr || eastBackfeed;
+      const subBTop = AppState.subBTopology || 'ring';
+      const subBEnc = (AppState.subBEnclosure || 'ais').toUpperCase();
+      const sbOn = b.dist_sub_b;
+      const sbHvActive = s.cbTieA !== false;
+      const sbHvCol = sbHvActive ? '#06b6d4' : '#64748b';
+      const sbHvCbCol = swCol(sbHvActive);
+      const sbSecCol = (sbOn || b.subB_lv_backfed_from_A) ? '#f59e0b' : '#64748b';
+      const sbTxY = 117;
+
+      // Right-to-Left ANSI/IEEE C37.2 Substation B Schematic:
+      // East HV IN (x=868..838) -> Active HV Topology (x=742..838) -> TR-02 (x=706..738) -> 89-LVBA/52-LVB/89-LVBB (x=640..704) -> 13.8 kV Bus B (x=640) -> 52-F3 & 52-F4 (x=576..640)
+      let subBHvSvg = '';
+      if (subBTop === 'single') {
+        subBHvSvg = `
+          <text x="802" y="31" fill="#38bdf8" font-size="5.0" text-anchor="middle" font-weight="bold" font-family="monospace">${vs.hvKv}kV SINGLE BUS (${subBEnc})</text>
+          <line x1="870" y1="54" x2="834" y2="54" stroke="${sbHvCol}" stroke-width="2.1"/>
+          ${flowOverlay('M 870,54 L 834,54', '#38bdf8', true, 0.85)}
+          <text x="869" y="47" fill="#38bdf8" font-size="4.8" text-anchor="end" font-weight="bold" font-family="monospace">◄ HV IN ${vs.hvKv}kV</text>
+          <text x="852" y="65" fill="#94a3b8" font-size="4.5" text-anchor="middle" font-family="monospace">LA-B / 89LB1</text>
+          <line x1="834" y1="38" x2="834" y2="180" stroke="${sbHvCol}" stroke-width="3.0" stroke-linecap="round"/>
+          <line x1="834" y1="${sbTxY}" x2="736" y2="${sbTxY}" stroke="${sbHvCol}" stroke-width="2.0"/>
+          ${flowOverlay(`M 834,${sbTxY} L 736,${sbTxY}`, '#38bdf8', true, 0.95)}
+          <circle cx="820" cy="${sbTxY}" r="2.0" fill="#ef4444"/><text x="820" y="${sbTxY - 7}" fill="#ef4444" font-size="4.6" text-anchor="middle" font-family="monospace">89B2</text>
+          <rect x="782" y="${sbTxY - 8}" width="24" height="15" rx="2" fill="#ef4444" stroke="#fff" stroke-width="0.9"/>
+          <text x="794" y="${sbTxY + 2}" fill="#fff" font-size="5.6" text-anchor="middle" font-weight="bold" font-family="monospace">52-B</text>
+          <circle cx="766" cy="${sbTxY}" r="2.0" fill="#ef4444"/><text x="766" y="${sbTxY - 7}" fill="#ef4444" font-size="4.6" text-anchor="middle" font-family="monospace">89B1</text>
+          <rect x="772" y="152" width="44" height="12" rx="2" fill="rgba(15,23,42,0.85)" stroke="#10b981" stroke-width="0.7"/>
+          <text x="794" y="160" fill="#10b981" font-size="4.6" text-anchor="middle" font-family="monospace">89EB: OPN</text>
+        `;
+      } else if (subBTop === 'maintransfer') {
+        subBHvSvg = `
+          <text x="802" y="31" fill="#38bdf8" font-size="5.0" text-anchor="middle" font-weight="bold" font-family="monospace">${vs.hvKv}kV MAIN+XFER (${subBEnc})</text>
+          <line x1="870" y1="50" x2="838" y2="50" stroke="${sbHvCol}" stroke-width="2.1"/>
+          ${flowOverlay('M 870,50 L 838,50', '#38bdf8', true, 0.85)}
+          <text x="869" y="43" fill="#38bdf8" font-size="4.7" text-anchor="end" font-weight="bold" font-family="monospace">◄ HV IN</text>
+          <line x1="838" y1="38" x2="838" y2="184" stroke="${sbHvCol}" stroke-width="3.0"/>
+          <text x="841" y="182" fill="#38bdf8" font-size="4.3" font-family="monospace">MAIN</text>
+          <line x1="814" y1="42" x2="814" y2="180" stroke="#f59e0b" stroke-width="2.0" stroke-dasharray="3,2"/>
+          <text x="812" y="188" fill="#f59e0b" font-size="4.3" text-anchor="end" font-family="monospace">XFER</text>
+          <!-- Bus-Tie 52-BTB at bottom -->
+          <line x1="814" y1="164" x2="838" y2="164" stroke="#f59e0b" stroke-width="1.6"/>
+          <rect x="819" y="158" width="14" height="11" rx="1.5" fill="#10b981" stroke="#fff" stroke-width="0.7"/>
+          <text x="826" y="166" fill="#fff" font-size="4.2" text-anchor="middle" font-family="monospace">BT</text>
+          <text x="800" y="166" fill="#10b981" font-size="4.3" text-anchor="end" font-family="monospace">89BT1/2</text>
+          <!-- Bypass Jumper over top -> 89-BYPB -->
+          <path d="M 814,68 L 750,68 L 750,${sbTxY}" fill="none" stroke="#f59e0b" stroke-width="1.4" stroke-dasharray="2.5,2"/>
+          <rect x="768" y="61" width="28" height="11" rx="1.5" fill="#10b981" stroke="#fff" stroke-width="0.7"/>
+          <text x="782" y="68.5" fill="#fff" font-size="4.4" text-anchor="middle" font-family="monospace">89BYP</text>
+          <!-- Main TR-02 Bay -->
+          <line x1="838" y1="${sbTxY}" x2="736" y2="${sbTxY}" stroke="${sbHvCol}" stroke-width="2.0"/>
+          ${flowOverlay(`M 838,${sbTxY} L 736,${sbTxY}`, '#38bdf8', true, 0.95)}
+          <circle cx="826" cy="${sbTxY}" r="1.9" fill="#ef4444"/><text x="826" y="${sbTxY - 6}" fill="#ef4444" font-size="4.3" text-anchor="middle" font-family="monospace">89B2</text>
+          <rect x="784" y="${sbTxY - 8}" width="24" height="15" rx="2" fill="#ef4444" stroke="#fff" stroke-width="0.9"/>
+          <text x="796" y="${sbTxY + 2}" fill="#fff" font-size="5.4" text-anchor="middle" font-weight="bold" font-family="monospace">52-B</text>
+          <circle cx="770" cy="${sbTxY}" r="1.9" fill="#ef4444"/><text x="770" y="${sbTxY - 6}" fill="#ef4444" font-size="4.3" text-anchor="middle" font-family="monospace">89B1</text>
+        `;
+      } else if (subBTop === 'ring') {
+        subBHvSvg = `
+          <text x="802" y="31" fill="#34d399" font-size="5.0" text-anchor="middle" font-weight="bold" font-family="monospace">${vs.hvKv}kV RING BUS (4-CB)</text>
+          <polygon points="756,48 840,48 840,180 756,180" fill="none" stroke="${sbHvCol}" stroke-width="2.0"/>
+          <line x1="870" y1="112" x2="840" y2="112" stroke="${sbHvCol}" stroke-width="2.1"/>
+          ${flowOverlay('M 870,112 L 840,112', '#38bdf8', true, 0.8)}
+          <text x="869" y="104" fill="#38bdf8" font-size="4.6" text-anchor="end" font-weight="bold" font-family="monospace">◄ IN ${vs.hvKv}kV</text>
+          <line x1="756" y1="${sbTxY}" x2="736" y2="${sbTxY}" stroke="${sbHvCol}" stroke-width="2.0"/>
+          ${flowOverlay('M 840,112 L 840,48 L 756,48 L 756,117 L 736,117', '#38bdf8', true, 1.3)}
+          ${flowOverlay('M 840,112 L 840,180 L 756,180 L 756,117 L 736,117', '#2dd4bf', true, 1.35)}
+          <!-- North Ring CB 52-1B + 89-1A/1B -->
+          <rect x="786" y="41" width="24" height="13" rx="1.8" fill="${sbHvCbCol}" stroke="#fff" stroke-width="0.8"/>
+          <text x="798" y="50" fill="#fff" font-size="5.0" text-anchor="middle" font-weight="bold" font-family="monospace">52-1B</text>
+          ${sldBadge(774, 41, '89-1A', sbHvCbCol, 'middle', 4.3)}
+          ${sldBadge(822, 41, '89-1B', sbHvCbCol, 'middle', 4.3)}
+          <!-- East-North Ring CB 52-2B + 89-2A/2B -->
+          <rect x="828" y="68" width="24" height="13" rx="1.8" fill="${sbHvCbCol}" stroke="#fff" stroke-width="0.8"/>
+          <text x="840" y="77" fill="#fff" font-size="5.0" text-anchor="middle" font-weight="bold" font-family="monospace">52-2B</text>
+          ${sldBadge(854, 62, '89-2A', sbHvCbCol, 'start', 4.2)}
+          ${sldBadge(854, 91, '89-2B', sbHvCbCol, 'start', 4.2)}
+          <!-- South Ring CB 52-3B + 89-3A/3B -->
+          <rect x="786" y="173" width="24" height="13" rx="1.8" fill="${sbHvCbCol}" stroke="#fff" stroke-width="0.8"/>
+          <text x="798" y="182" fill="#fff" font-size="5.0" text-anchor="middle" font-weight="bold" font-family="monospace">52-3B</text>
+          ${sldBadge(774, 196, '89-3A', sbHvCbCol, 'middle', 4.3)}
+          ${sldBadge(822, 196, '89-3B', sbHvCbCol, 'middle', 4.3)}
+          <!-- West-South Ring CB 52-4B + 89-4A/4B -->
+          <rect x="744" y="138" width="24" height="13" rx="1.8" fill="${sbHvCbCol}" stroke="#fff" stroke-width="0.8"/>
+          <text x="756" y="147" fill="#fff" font-size="5.0" text-anchor="middle" font-weight="bold" font-family="monospace">52-4B</text>
+          ${sldBadge(742, 132, '89-4A', sbHvCbCol, 'end', 4.2)}
+          ${sldBadge(742, 162, '89-4B', sbHvCbCol, 'end', 4.2)}
+        `;
+      } else if (subBTop === 'breakerhalf') {
+        subBHvSvg = `
+          <text x="802" y="31" fill="#34d399" font-size="5.0" text-anchor="middle" font-weight="bold" font-family="monospace">${vs.hvKv}kV 1.5 CB (${subBEnc})</text>
+          <line x1="748" y1="44" x2="862" y2="44" stroke="${sbHvCol}" stroke-width="2.8"/>
+          <text x="805" y="39" fill="#38bdf8" font-size="4.5" text-anchor="middle" font-family="monospace">MAIN BUS A</text>
+          <line x1="748" y1="184" x2="862" y2="184" stroke="${sbHvCol}" stroke-width="2.8"/>
+          <text x="805" y="194" fill="#2dd4bf" font-size="4.5" text-anchor="middle" font-family="monospace">MAIN BUS B</text>
+          <line x1="802" y1="44" x2="802" y2="184" stroke="${sbHvCol}" stroke-width="2.0"/>
+          <line x1="870" y1="86" x2="802" y2="86" stroke="${sbHvCol}" stroke-width="2.0"/>
+          <text x="869" y="79" fill="#38bdf8" font-size="4.6" text-anchor="end" font-weight="bold" font-family="monospace">◄ IN ${vs.hvKv}kV</text>
+          <path d="M 802,136 L 752,136 L 752,${sbTxY} L 736,${sbTxY}" fill="none" stroke="${sbHvCol}" stroke-width="2.0"/>
+          ${flowOverlay(`M 870,86 L 802,86 L 802,136 L 752,136 L 752,${sbTxY} L 736,${sbTxY}`, '#38bdf8', true, 1.15)}
+          ${flowOverlay(`M 802,86 L 802,44 L 860,44`, '#2dd4bf', true, 1.25)}
+          <rect x="789" y="57" width="26" height="12" rx="1.6" fill="#ef4444" stroke="#fff" stroke-width="0.8"/>
+          <text x="802" y="65.5" fill="#fff" font-size="4.9" text-anchor="middle" font-weight="bold" font-family="monospace">52-AB</text>
+          <text x="818" y="56" fill="#ef4444" font-size="4.2" font-family="monospace">89A1</text><text x="818" y="74" fill="#ef4444" font-size="4.2" font-family="monospace">89A2</text>
+          <rect x="786" y="102" width="32" height="13" rx="1.6" fill="#ef4444" stroke="#fff" stroke-width="0.8"/>
+          <text x="802" y="111" fill="#fff" font-size="4.9" text-anchor="middle" font-weight="bold" font-family="monospace">52-TIE</text>
+          <text x="820" y="101" fill="#ef4444" font-size="4.2" font-family="monospace">89T1</text><text x="820" y="121" fill="#ef4444" font-size="4.2" font-family="monospace">89T2</text>
+          <rect x="789" y="152" width="26" height="12" rx="1.6" fill="#ef4444" stroke="#fff" stroke-width="0.8"/>
+          <text x="802" y="160.5" fill="#fff" font-size="4.9" text-anchor="middle" font-weight="bold" font-family="monospace">52-BB</text>
+          <text x="818" y="150" fill="#ef4444" font-size="4.2" font-family="monospace">89B1</text><text x="818" y="170" fill="#ef4444" font-size="4.2" font-family="monospace">89B2</text>
+        `;
+      } else {
+        // doublebreaker (2.0 CB)
+        subBHvSvg = `
+          <text x="802" y="31" fill="#34d399" font-size="4.8" text-anchor="middle" font-weight="bold" font-family="monospace">${vs.hvKv}kV 2.0 CB (${subBEnc})</text>
+          <line x1="748" y1="44" x2="862" y2="44" stroke="${sbHvCol}" stroke-width="2.8"/>
+          <text x="805" y="39" fill="#38bdf8" font-size="4.5" text-anchor="middle" font-family="monospace">MAIN BUS A (100%)</text>
+          <line x1="748" y1="184" x2="862" y2="184" stroke="#2dd4bf" stroke-width="2.8"/>
+          <text x="805" y="194" fill="#2dd4bf" font-size="4.5" text-anchor="middle" font-family="monospace">MAIN BUS B (100%)</text>
+          <!-- East Bay 1 (HV IN) at x=826 -->
+          <line x1="870" y1="114" x2="826" y2="114" stroke="${sbHvCol}" stroke-width="2.0"/>
+          <text x="869" y="106" fill="#38bdf8" font-size="4.5" text-anchor="end" font-weight="bold" font-family="monospace">◄ IN</text>
+          <line x1="826" y1="44" x2="826" y2="184" stroke="${sbHvCol}" stroke-width="1.8"/>
+          <!-- West Bay 2 (TR-02) at x=770 -->
+          <line x1="770" y1="44" x2="770" y2="184" stroke="${sbHvCol}" stroke-width="1.8"/>
+          <line x1="770" y1="${sbTxY}" x2="736" y2="${sbTxY}" stroke="${sbHvCol}" stroke-width="2.0"/>
+          ${flowOverlay(`M 870,114 L 826,114 L 826,44 L 770,44 L 770,${sbTxY} L 736,${sbTxY}`, '#38bdf8', true, 1.2)}
+          ${flowOverlay(`M 826,114 L 826,184 L 770,184 L 770,${sbTxY}`, '#2dd4bf', true, 1.2)}
+          <rect x="812" y="64" width="28" height="12" rx="1.6" fill="#ef4444" stroke="#fff" stroke-width="0.7"/>
+          <text x="826" y="72.5" fill="#fff" font-size="4.8" text-anchor="middle" font-family="monospace">52-1AB</text>
+          <rect x="812" y="148" width="28" height="12" rx="1.6" fill="#ef4444" stroke="#fff" stroke-width="0.7"/>
+          <text x="826" y="156.5" fill="#fff" font-size="4.8" text-anchor="middle" font-family="monospace">52-1BB</text>
+          <text x="842" y="58" fill="#ef4444" font-size="4.0" font-family="monospace">89-1A</text>
+          <text x="842" y="172" fill="#ef4444" font-size="4.0" font-family="monospace">89-1B</text>
+          <rect x="756" y="64" width="28" height="12" rx="1.6" fill="#ef4444" stroke="#fff" stroke-width="0.7"/>
+          <text x="770" y="72.5" fill="#fff" font-size="4.8" text-anchor="middle" font-family="monospace">52-2AB</text>
+          <rect x="756" y="148" width="28" height="12" rx="1.6" fill="#ef4444" stroke="#fff" stroke-width="0.7"/>
+          <text x="770" y="156.5" fill="#fff" font-size="4.8" text-anchor="middle" font-family="monospace">52-2BB</text>
+          <text x="754" y="58" fill="#ef4444" font-size="4.0" text-anchor="end" font-family="monospace">89-2A</text>
+          <text x="754" y="172" fill="#ef4444" font-size="4.0" text-anchor="end" font-family="monospace">89-2B</text>
+        `;
+      }
+
+      const f3BayClosed = (s.cbF3 !== false && s.dsF3A !== false && s.dsF3B !== false);
+      const f4BayClosed = (s.cbF4 !== false && s.dsF4A !== false && s.dsF4B !== false);
+      const f3BayLive = f3BayClosed && (sbOn || (b.fdr3_from_subA && b.dist_f3));
+      const f4BayLive = f4BayClosed && (sbOn || (b.fdr4_from_subA && b.dist_f4));
+      const f3BayPath = b.fdr3_from_subA ? 'M 576,82 L 640,82' : 'M 640,82 L 576,82';
+      const f4BayPath = b.fdr4_from_subA ? 'M 576,152 L 640,152' : 'M 640,152 L 576,152';
+
+      const subBSvg = `
+        <!-- Substation B Secondary 13.8 kV Feeders (52-F3 North, 52-F4 South), 13.8 kV Bus B, 52-LVB Main & TR-02 -->
+        <line x1="640" y1="82" x2="576" y2="82" stroke="${f3BayLive ? (b.fdr3_from_subA ? '#38bdf8' : '#10b981') : '#64748b'}" stroke-width="2.0" ${f3BayLive ? '' : 'stroke-dasharray="3,2"'}/>
+        ${flowOverlay(f3BayPath, b.fdr3_from_subA ? '#38bdf8' : '#34d399', f3BayLive, 0.9)}
+        <g onclick="operateSwitch('dsF3A')" style="cursor:pointer;">
+          <circle cx="629" cy="82" r="1.9" fill="${swCol(s.dsF3A !== false)}"/>
+          ${sldBadge(629, 72, '89F3A', swCol(s.dsF3A !== false), 'middle', 4.5)}
+        </g>
+        <g onclick="operateSwitch('cbF3')" style="cursor:pointer;">
+          <rect x="598" y="74" width="22" height="15" rx="1.8" fill="${swCol(s.cbF3 !== false)}" stroke="#fff" stroke-width="0.8"/>
+          <text x="609" y="84" fill="#fff" font-size="5.3" text-anchor="middle" font-weight="bold" font-family="monospace">52-F3</text>
+        </g>
+        <g onclick="operateSwitch('dsF3B')" style="cursor:pointer;">
+          <circle cx="588" cy="82" r="1.9" fill="${swCol(s.dsF3B !== false)}"/>
+          ${sldBadge(588, 94, '89F3B', swCol(s.dsF3B !== false), 'middle', 4.5)}
+        </g>
+
+        <line x1="640" y1="152" x2="576" y2="152" stroke="${f4BayLive ? (b.fdr4_from_subA ? '#38bdf8' : '#10b981') : '#64748b'}" stroke-width="2.0" ${f4BayLive ? '' : 'stroke-dasharray="3,2"'}/>
+        ${flowOverlay(f4BayPath, b.fdr4_from_subA ? '#38bdf8' : '#34d399', f4BayLive, 0.9)}
+        <g onclick="operateSwitch('dsF4A')" style="cursor:pointer;">
+          <circle cx="629" cy="152" r="1.9" fill="${swCol(s.dsF4A !== false)}"/>
+          ${sldBadge(629, 142, '89F4A', swCol(s.dsF4A !== false), 'middle', 4.5)}
+        </g>
+        <g onclick="operateSwitch('cbF4')" style="cursor:pointer;">
+          <rect x="598" y="144" width="22" height="15" rx="1.8" fill="${swCol(s.cbF4 !== false)}" stroke="#fff" stroke-width="0.8"/>
+          <text x="609" y="154" fill="#fff" font-size="5.3" text-anchor="middle" font-weight="bold" font-family="monospace">52-F4</text>
+        </g>
+        <g onclick="operateSwitch('dsF4B')" style="cursor:pointer;">
+          <circle cx="588" cy="152" r="1.9" fill="${swCol(s.dsF4B !== false)}"/>
+          ${sldBadge(588, 164, '89F4B', swCol(s.dsF4B !== false), 'middle', 4.5)}
+        </g>
+
+        <!-- Sub B 13.8 kV Bus & Secondary Main 52-LVB -->
+        <line x1="640" y1="54" x2="640" y2="176" stroke="${sbSecCol}" stroke-width="3.2" stroke-linecap="round" ${(sbOn || b.subB_lv_backfed_from_A) ? '' : 'stroke-dasharray="3,2"'}/>
+        ${flowOverlay('M 640,117 L 640,82', '#fbbf24', sbOn || b.subB_lv_backfed_from_A, 0.8)}
+        ${flowOverlay('M 640,117 L 640,152', '#fbbf24', sbOn || b.subB_lv_backfed_from_A, 0.8)}
+        <text x="640" y="47" fill="${sbSecCol}" font-size="5.3" text-anchor="middle" font-weight="bold" font-family="monospace">${distKv}kV BUS B</text>
+
+        <line x1="704" y1="117" x2="640" y2="117" stroke="${sbOn ? '#f59e0b' : '#64748b'}" stroke-width="2.0" ${sbOn ? '' : 'stroke-dasharray="3,2"'}/>
+        ${flowOverlay('M 704,117 L 640,117', '#fbbf24', sbOn, 0.9)}
+        <g onclick="operateSwitch('dsLVBB')" style="cursor:pointer;">
+          <circle cx="651" cy="117" r="1.9" fill="${swCol(s.dsLVBB !== false)}"/>
+          ${sldBadge(651, 108, '89LVBB', swCol(s.dsLVBB !== false), 'middle', 4.3)}
+        </g>
+        <g onclick="operateSwitch('cbLVB')" style="cursor:pointer;">
+          <rect x="661" y="109" width="22" height="15" rx="1.8" fill="${swCol(s.cbLVB !== false)}" stroke="#fff" stroke-width="0.9"/>
+          <text x="672" y="119" fill="#fff" font-size="5.1" text-anchor="middle" font-weight="bold" font-family="monospace">52-LVB</text>
+        </g>
+        <g onclick="operateSwitch('dsLVBA')" style="cursor:pointer;">
+          <circle cx="693" cy="117" r="1.9" fill="${swCol(s.dsLVBA !== false)}"/>
+          ${sldBadge(694, 108, '89LVBA', swCol(s.dsLVBA !== false), 'middle', 4.3)}
+        </g>
+
+        <!-- TR-02 Power Transformer (Y on West LV -> Δ on East HV) -->
+        <circle cx="712" cy="117" r="8.0" fill="none" stroke="${sbSecCol}" stroke-width="1.6"/>
+        <circle cx="725" cy="117" r="8.0" fill="none" stroke="${sbHvCol}" stroke-width="1.6"/>
+        <text x="712" y="119.5" fill="#fff" font-size="5.8" text-anchor="middle" font-family="monospace">Y</text>
+        <text x="725" y="119.5" fill="#fff" font-size="5.8" text-anchor="middle" font-family="monospace">Δ</text>
+        <text x="719" y="105" fill="#10b981" font-size="5.4" text-anchor="middle" font-weight="bold" font-family="monospace">TR-02</text>
+        <text x="719" y="134" fill="#94a3b8" font-size="4.6" text-anchor="middle" font-family="monospace">${vs.hvKv}/${distKv}kV</text>
+        <line x1="740" y1="26" x2="740" y2="198" stroke="rgba(16,185,129,0.22)" stroke-dasharray="2.5,2.5"/>
+        ${subBHvSvg}
+      `;
+
+      const d1Sec1Path = (b.fdr1_from_subB && !!s.sec34) ? 'M 414,82 L 354,82' : 'M 354,82 L 414,82';
+      const tie1FlowSvg = b.tie1_dir === 'AtoB'
+        ? flowOverlay('M 468,82 L 496,82', '#38bdf8', true, 0.8)
+        : (b.tie1_dir === 'BtoA' ? flowOverlay('M 496,82 L 468,82', '#38bdf8', true, 0.8) : '');
+      const tie2FlowSvg = b.tie2_dir === 'AtoB'
+        ? flowOverlay('M 468,152 L 496,152', '#38bdf8', true, 0.8)
+        : (b.tie2_dir === 'BtoA' ? flowOverlay('M 496,152 L 468,152', '#38bdf8', true, 0.8) : '');
+
+      const distSvg = `
+        <line x1="358" y1="8" x2="358" y2="216" stroke="rgba(148,163,184,0.22)" stroke-dasharray="3,3"/>
+        <text x="468" y="13" fill="#67e8f9" font-size="5.8" text-anchor="middle" font-weight="bold" font-family="monospace">13.8 kV CITY LOOP CORRIDORS (140m SETBACK ROW ↔ EAST)</text>
+
+        <!-- NORTH LOOP (y = 82): 52-F1 -> 79-ACR1 -> URD + 34-SECT -> 100K/RES -> 79-TIE1 <-> EAST UNI 500kVA <-> 52-F3 -->
+        <line x1="354" y1="82" x2="414" y2="82" stroke="${d1Col}" stroke-width="2" ${b.dist_f1_sec1 ? '' : 'stroke-dasharray="3,2"'}/>
+        ${flowOverlay(d1Sec1Path, b.fdr1_from_subB ? '#38bdf8' : '#34d399', b.dist_f1_sec1, 0.95)}
+        <g onclick="operateSwitch('cbACR1')" style="cursor:pointer;">
+          <rect x="366" y="75" width="28" height="14" rx="2" fill="${swCol(s.cbACR1)}" stroke="#fff"/>
+          <text x="380" y="84.5" fill="#fff" font-size="5.4" text-anchor="middle" font-weight="bold" font-family="monospace">79-ACR1</text>
+        </g>
+
+        <g onclick="operateSwitch('sec34')" style="cursor:pointer;">
+          <circle cx="414" cy="82" r="2.0" fill="#fff"/><circle cx="428" cy="82" r="2.0" fill="#fff"/>
+          <line x1="414" y1="82" x2="${s.sec34 ? 428 : 424}" y2="${s.sec34 ? 82 : 71}" stroke="${swCol(s.sec34)}" stroke-width="2.1"/>
+          ${sldBadge(421, 66, '34-SECT', swCol(s.sec34), 'middle', 4.7)}
+        </g>
+
+        <line x1="428" y1="82" x2="468" y2="82" stroke="${d2Col}" stroke-width="2.0" ${b.dist_f1_sec2 ? '' : 'stroke-dasharray="3,2"'}/>
+        ${flowOverlay(reverseFlisr ? 'M 468,82 L 428,82' : 'M 428,82 L 468,82', reverseFlisr ? '#38bdf8' : '#34d399', b.dist_f1_sec2, 0.95)}
+
+        <!-- Gated URD Subdivision Tap & Pad TX (x=362..412, y=97..134) -->
+        <path d="M 402,82 L 402,97" fill="none" stroke="${d1Col}" stroke-width="1.4" ${b.dist_f1_sec1 ? '' : 'stroke-dasharray="2,2"'}/>
+        <g onclick="selectComponent('urd_vista_swgr', true)" style="cursor:pointer;">
+          <rect x="362" y="97" width="52" height="14" rx="2" fill="rgba(30,41,59,0.94)" stroke="#22c55e"/>
+          <text x="388" y="106.5" fill="${b.dist_f1_sec1 ? '#6ee7b7' : '#64748b'}" font-size="4.5" text-anchor="middle" font-family="monospace">URD RISER/VISTA</text>
+        </g>
+        <g onclick="selectComponent('dt_urd_pad', true)" style="cursor:pointer;">
+          <rect x="362" y="114" width="52" height="15" rx="2" fill="rgba(30,41,59,0.94)" stroke="#22c55e"/>
+          <text x="388" y="124" fill="${b.dist_f1_sec2 ? '#86efac' : '#64748b'}" font-size="4.5" text-anchor="middle" font-family="monospace">URD 150kVA (6x)</text>
+        </g>
+
+        <!-- Lateral 100K Fuse -> Residential 50 kVA Transformer -->
+        <line x1="444" y1="82" x2="444" y2="41" stroke="${latCol}" stroke-width="1.5" ${b.dist_lateral ? '' : 'stroke-dasharray="2,2"'}/>
+        ${flowOverlay('M 444,82 L 444,41', '#fbbf24', b.dist_lateral, 0.8)}
+        <g onclick="operateSwitch('fuseCutout')" style="cursor:pointer;">
+          <rect x="431" y="54" width="26" height="10" rx="2" fill="${swCol(s.fuseCutout)}" stroke="#fff" stroke-width="0.8"/>
+          <text x="444" y="61" fill="#fff" font-size="4.8" text-anchor="middle" font-family="monospace">100K</text>
+        </g>
+        <g onclick="selectComponent('dt_res_50', true)" style="cursor:pointer;">
+          <rect x="418" y="23" width="52" height="18" rx="2.2" fill="rgba(30,41,59,0.94)" stroke="${latCol}"/>
+          <text x="444" y="34.5" fill="${b.dist_lateral ? '#fde047' : '#64748b'}" font-size="4.8" text-anchor="middle" font-weight="bold" font-family="monospace">RES 50kVA</text>
+        </g>
+
+        <!-- 79-TIE1 North Loop Recloser & Sub B 52-F3 East Corridor (x = 468..576) -->
+        <line x1="496" y1="82" x2="576" y2="82" stroke="${f3Col}" stroke-width="2.0" ${b.dist_f3 ? '' : 'stroke-dasharray="3,2"'}/>
+        ${flowOverlay(b.fdr3_from_subA ? 'M 496,82 L 576,82' : 'M 576,82 L 496,82', b.fdr3_from_subA ? '#38bdf8' : '#34d399', b.dist_f3, 0.9)}
+        ${tie1FlowSvg}
+        <g onclick="operateSwitch('cbTieB')" style="cursor:pointer;">
+          <rect x="468" y="75" width="28" height="14" rx="2" fill="${swCol(s.cbTieB)}" stroke="#fff"/>
+          <text x="482" y="84.5" fill="#fff" font-size="5.3" text-anchor="middle" font-weight="bold" font-family="monospace">79-TIE1</text>
+        </g>
+        <line x1="532" y1="82" x2="532" y2="41" stroke="${f3Col}" stroke-width="1.5" ${b.dist_f3 ? '' : 'stroke-dasharray="2,2"'}/>
+        ${flowOverlay('M 532,82 L 532,41', b.fdr3_from_subA ? '#38bdf8' : '#fbbf24', b.dist_f3, 0.8)}
+        <g onclick="selectComponent('dt_uni_500', true)" style="cursor:pointer;">
+          <rect x="496" y="23" width="72" height="18" rx="2.2" fill="rgba(30,41,59,0.94)" stroke="${f3Col}"/>
+          <text x="532" y="34.5" fill="${b.dist_f3 ? '#fde68a' : '#64748b'}" font-size="4.8" text-anchor="middle" font-weight="bold" font-family="monospace">EAST UNI 500kVA</text>
+        </g>
+
+        <!-- SOUTH LOOP (y = 152): 52-F2 -> 79-F2 -> CAP-F2 -> CBD/HOSP 750kVA -> 89-TIE2 <-> MUN/LOG 1000kVA <-> 52-F4 -->
+        <line x1="354" y1="152" x2="468" y2="152" stroke="${d2mCol}" stroke-width="2.0" ${b.dist_f2_main ? '' : 'stroke-dasharray="3,2"'}/>
+        ${flowOverlay(reverseSouthFlisr ? 'M 468,152 L 354,152' : 'M 354,152 L 468,152', reverseSouthFlisr ? '#38bdf8' : '#34d399', b.dist_f2_main, 0.95)}
+        <g onclick="operateSwitch('cbF2Rec')" style="cursor:pointer;">
+          <rect x="366" y="145" width="26" height="14" rx="2" fill="${swCol(s.cbF2Rec !== false)}" stroke="#fff"/>
+          <text x="379" y="154.5" fill="#fff" font-size="5.4" text-anchor="middle" font-weight="bold" font-family="monospace">79-F2</text>
+        </g>
+        <text x="418" y="167" fill="#67e8f9" font-size="4.6" text-anchor="middle" font-family="monospace">CAP-F2 (900kVAR)</text>
+        <line x1="444" y1="152" x2="444" y2="132" stroke="${d2mCol}" stroke-width="1.5" ${b.dist_f2_main ? '' : 'stroke-dasharray="2,2"'}/>
+        ${flowOverlay('M 444,152 L 444,132', reverseSouthFlisr ? '#38bdf8' : '#fbbf24', b.dist_f2_main, 0.8)}
+        <g onclick="selectComponent('dt_com_750', true)" style="cursor:pointer;">
+          <rect x="418" y="114" width="54" height="18" rx="2.2" fill="rgba(30,41,59,0.94)" stroke="${d2mCol}"/>
+          <text x="445" y="125.5" fill="${b.dist_f2_main ? '#38bdf8' : '#64748b'}" font-size="4.7" text-anchor="middle" font-weight="bold" font-family="monospace">CBD 750kVA</text>
+        </g>
+
+        <line x1="496" y1="152" x2="576" y2="152" stroke="${f4Col}" stroke-width="2.0" ${b.dist_f4 ? '' : 'stroke-dasharray="3,2"'}/>
+        ${flowOverlay(b.fdr4_from_subA ? 'M 496,152 L 576,152' : 'M 576,152 L 496,152', b.fdr4_from_subA ? '#38bdf8' : '#34d399', b.dist_f4, 0.9)}
+        ${tie2FlowSvg}
+        <g onclick="operateSwitch('cbTie2')" style="cursor:pointer;">
+          <rect x="468" y="145" width="28" height="14" rx="2" fill="${swCol(s.cbTie2)}" stroke="#fff"/>
+          <text x="482" y="154.5" fill="#fff" font-size="5.3" text-anchor="middle" font-weight="bold" font-family="monospace">89-TIE2</text>
+        </g>
+        <line x1="532" y1="152" x2="532" y2="132" stroke="${f4Col}" stroke-width="1.5" ${b.dist_f4 ? '' : 'stroke-dasharray="2,2"'}/>
+        ${flowOverlay('M 532,152 L 532,132', b.fdr4_from_subA ? '#38bdf8' : '#fbbf24', b.dist_f4, 0.8)}
+        <g onclick="selectComponent('dt_mun_1000', true)" style="cursor:pointer;">
+          <rect x="496" y="114" width="72" height="18" rx="2.2" fill="rgba(30,41,59,0.94)" stroke="${f4Col}"/>
+          <text x="532" y="125.5" fill="${b.dist_f4 ? '#7dd3fc' : '#64748b'}" font-size="4.7" text-anchor="middle" font-weight="bold" font-family="monospace">MUN/LOG 1MVA</text>
+        </g>
+
+        <g id="sld-sub-b-panel" onclick="setTargetSubstation('B'); selectComponent('substation_b', false);" style="cursor:pointer;">
+          <rect x="578" y="18" width="296" height="196" rx="4" fill="rgba(16,185,129,0.06)" stroke="#10b981" stroke-width="1.1"/>
+          <text x="726" y="12.5" fill="#34d399" font-size="5.7" text-anchor="middle" font-weight="bold" font-family="monospace">TIE SUB B (${subBTop.toUpperCase()} / ${subBEnc}) — CLICK TO CONFIGURE</text>
+          ${subBSvg}
+          <text x="726" y="208" fill="#94a3b8" font-size="4.6" text-anchor="middle" font-family="monospace">EAST HV IN → ${subBTop.toUpperCase()} HV BUS → TR-02 → 52-LVB → ${distKv} kV BUS B → 52-F3 &amp; 52-F4</text>
+        </g>
+
+        <rect x="362" y="184" width="212" height="27" rx="3" fill="rgba(2,6,23,0.88)" stroke="${anyBackfeed ? '#38bdf8' : 'rgba(56,189,248,0.35)'}"/>
+        <text x="468" y="195" fill="${anyBackfeed ? '#67e8f9' : '#94a3b8'}" font-size="4.8" text-anchor="middle" font-weight="bold" font-family="monospace">${b.loopModeBanner || 'MODE: NORMAL RADIAL (TIES OPEN)'}</text>
+        <text x="468" y="205.5" fill="#cbd5e1" font-size="4.6" text-anchor="middle" font-family="monospace">F1:${b.dist_f1_sec2?'ON':'OFF'} F2:${b.dist_f2_main?'ON':'OFF'} F3:${b.dist_f3?'ON':'OFF'} F4:${b.dist_f4?'ON':'OFF'} | IND:${b.ind_hv?'LIVE':'OFF'}</text>
+      `;
+
+      const baseSvgInner = `${primarySvg}${secondarySvg}${distSvg}${hotspotsSvg}${activeFaultSvg}`;
       if (container) {
-        container.innerHTML = `<svg viewBox="0 0 360 192" width="100%" height="100%">${baseSvgInner}</svg>`;
+        container.innerHTML = `<svg viewBox="-52 -12 984 272" preserveAspectRatio="xMidYMid meet" width="100%" height="100%">${baseSvgInner}</svg>`;
       }
 
       if (expContainer) {
+        const expZ = AppState.sldZoom || 1.0;
+        const expTx = (AppState.sldPanX || 0) + 440 * (1 - expZ);
+        const expTy = (AppState.sldPanY || 0) + 124 * (1 - expZ);
         const expOverlay = pf ? `
-          <rect x="6" y="176" width="164" height="13" rx="2" fill="rgba(2,6,23,0.85)" stroke="rgba(56,189,248,0.35)" stroke-width="0.6"/>
-          <text x="12" y="185" fill="#38bdf8" font-size="5.6" font-family="monospace">HV: ${vs.hvKv} kV | ${pf.iHvA.toFixed(1)} A | ${pf.sLoadMva.toFixed(1)} MVA | ANSI 87B/87T/21</text>
-          <rect x="182" y="176" width="172" height="13" rx="2" fill="rgba(2,6,23,0.85)" stroke="rgba(245,158,11,0.35)" stroke-width="0.6"/>
-          <text x="188" y="185" fill="#fbbf24" font-size="5.6" font-family="monospace">LV: ${pf.vLvKvActual.toFixed(2)} kV (${pf.vLvPu.toFixed(3)}pu) | ${pf.iLvA.toFixed(0)} A | ANSI 50/51/51N</text>
+          <rect x="-24" y="229" width="446" height="17" rx="2.5" fill="rgba(2,6,23,0.90)" stroke="rgba(56,189,248,0.38)" stroke-width="0.6"/>
+          <text x="-16" y="240" fill="#38bdf8" font-size="5.6" font-family="monospace">SUB A: ${vs.cascadeLabel || (vs.hvKv + ' kV')} | ${pf.iHvA.toFixed(1)} A | ${pf.sSubAMva.toFixed(2)} MVA | IND(${indKv}kV): ${pf.iIndA.toFixed(0)} A | ${top.toUpperCase()}</text>
+          <rect x="432" y="229" width="470" height="17" rx="2.5" fill="rgba(2,6,23,0.90)" stroke="rgba(245,158,11,0.38)" stroke-width="0.6"/>
+          <text x="440" y="240" fill="#fbbf24" font-size="5.6" font-family="monospace">CITY ${distKv} kV (${pf.vDistKvActual.toFixed(2)} kV, ${pf.vDistPu.toFixed(3)}pu) | F1–F4: ${pf.iF1A.toFixed(0)}/${pf.iF2A.toFixed(0)}/${pf.iF3A.toFixed(0)}/${pf.iF4A.toFixed(0)}A | SUB B: ${pf.sSubBMva.toFixed(2)} MVA (${subBTop.toUpperCase()})</text>
         ` : '';
         expContainer.innerHTML = `
-          <svg viewBox="0 0 360 192" width="100%" height="100%">
-            <g id="sld-exp-panzoom-group" transform="translate(${AppState.sldPanX.toFixed(1)}, ${AppState.sldPanY.toFixed(1)}) scale(${AppState.sldZoom.toFixed(2)})">
+          <svg viewBox="-52 -12 984 272" preserveAspectRatio="xMidYMid meet" width="100%" height="100%">
+            <g id="sld-exp-panzoom-group" transform="translate(${expTx.toFixed(1)}, ${expTy.toFixed(1)}) scale(${expZ.toFixed(2)})">
               ${baseSvgInner}
               ${expOverlay}
             </g>
@@ -3473,9 +4773,9 @@ def get_js_app_core():
       if (expFooter && pf) {
         const faultStr = faultNode && PINPOINT_FAULT_NODES[faultNode] ? `<strong style="color:#f87171;">⚡ ACTIVE FAULT: ${PINPOINT_FAULT_NODES[faultNode].name}</strong>` : '<span style="color:#10b981;">● System Steady-State</span>';
         expFooter.innerHTML = `
-          <span>Topology: <strong style="color:#38bdf8;">${top.toUpperCase()} (${AppState.enclosureType.toUpperCase()})</strong></span>
-          <span>HV/LV: <strong>${vs.hvKv}/${vs.lvKv} kV</strong> (${pf.vLvPu.toFixed(3)} pu)</span>
-          <span>Flow: <strong>${pf.pLoadMw.toFixed(1)} MW / ${pf.qNetMvar.toFixed(1)} MVAR</strong> (PF ${pf.pfNet.toFixed(3)})</span>
+          <span>Sub A / Sub B: <strong style="color:#38bdf8;">${top.toUpperCase()} (${AppState.enclosureType.toUpperCase()}) ⇄ ${subBTop.toUpperCase()} (${subBEnc})</strong></span>
+          <span>Cascade: <strong>${vs.cascadeLabel || (vs.hvKv + '/' + distKv + ' kV')}</strong> (${pf.vDistPu.toFixed(3)} pu)</span>
+          <span>Flow: <strong>${pf.pLoadMw.toFixed(1)} MW / ${pf.qNetMvar.toFixed(1)} MVAR</strong> (IND ${pf.indKv}kV)</span>
           <span>${faultStr}</span>
         `;
       }
@@ -3495,6 +4795,48 @@ def get_js_app_core():
       }
     }
 
+    function getInspectorQuickMeta(compKey) {
+      const pqMap = {
+        dt_ind_1500: 'ind_sub', ind_corridor_pole: 'ind_sub',
+        dt_com_750: 'cbd_bus', sub_com: 'cbd_bus',
+        dt_urd_pad: 'urd_pad', urd_riser_pole: 'urd_pad', urd_vista_swgr: 'urd_pad',
+        dt_res_50: 'res_50', dist_pole_p1: 'res_50', dist_pole_p2: 'res_50', dist_pole_p3: 'res_50', dist_pole_p4: 'res_50', fuseCutout: 'res_50', recloser_acr1: 'res_50',
+        transformer: 'tr01_pri_delta', tx_hvbushing: 'tr01_pri_delta', tx_lvbushing: 'tr01_pri_delta', ngr_resistor: 'tr01_pri_delta',
+        substation_b: 'bus_b_138', sub_b: 'bus_b_138', dt_uni_500: 'bus_b_138', dt_mun_1000: 'bus_b_138'
+      };
+      const faultMap = {
+        incoming_gantry: 'node1_incoming', surge_arrester: 'node1_incoming', ctvt_unit: 'node1_incoming',
+        main_busbar: 'node2_hv_bus', breaker_52: 'node2_hv_bus', disconnect_89: 'node2_hv_bus',
+        transformer: 'node3_tx_hv', tx_hvbushing: 'node3_tx_hv',
+        tx_lvbushing: 'node4_tx_lv', ngr_resistor: 'node4_tx_lv',
+        sec_bus: 'node5_lv_bus', sec_breaker: 'node5_lv_bus', cap_bank: 'node5_lv_bus', sst_100: 'node5_lv_bus',
+        dt_ind_1500: 'node8_ind_sub', ind_corridor_pole: 'node7_ind_hv',
+        recloser_acr1: 'node9_acr1', dist_pole_p1: 'node6_fdr1', dist_pole_p2: 'node9_acr1', dist_pole_p3: 'node10_res_lat', dist_pole_p4: 'node12_cbd_bus',
+        dt_res_50: 'node10_res_lat', fuseCutout: 'node10_res_lat',
+        dt_urd_pad: 'node11_urd_pad', urd_riser_pole: 'node11_urd_pad', urd_vista_swgr: 'node11_urd_pad',
+        dt_com_750: 'node12_cbd_bus', sub_com: 'node12_cbd_bus',
+        recloser_tie1: 'node13_tie1', recloser_tie2: 'node14_tie2',
+        dt_uni_500: 'node15_uni_bus', dt_mun_1000: 'node16_mun_bus',
+        substation_b: 'node17_subb_hv', sub_b: 'node17_subb_hv'
+      };
+      const sliderMap = {
+        transformer: { key: 'txMvaOverride', label: 'TR-01 Rating (MVA)', min: 10, max: 300, step: 5, unit: 'MVA' },
+        substation_b: { key: 'subBTxMva', label: 'TR-02 Tie Rating (MVA)', min: 5, max: 100, step: 2.5, unit: 'MVA' },
+        sub_b: { key: 'subBTxMva', label: 'TR-02 Tie Rating (MVA)', min: 5, max: 100, step: 2.5, unit: 'MVA' },
+        dt_res_50: { key: 'resKva', label: 'RES Demand (kVA)', min: 25, max: 5000, step: 25, unit: 'kVA' },
+        dt_urd_pad: { key: 'urdKva', label: 'URD Subdivision (kVA)', min: 150, max: 15000, step: 150, unit: 'kVA' },
+        dt_com_750: { key: 'cbdKva', label: 'CBD Hospital/Tower (kVA)', min: 250, max: 25000, step: 250, unit: 'kVA' },
+        dt_uni_500: { key: 'uniKva', label: 'East University (kVA)', min: 100, max: 15000, step: 100, unit: 'kVA' },
+        dt_mun_1000: { key: 'munKva', label: 'Municipal Water/Log (kVA)', min: 250, max: 20000, step: 250, unit: 'kVA' },
+        dt_ind_1500: { key: 'indMva', label: 'Industrial Plant (MVA)', min: 5, max: 80, step: 2.5, unit: 'MVA' }
+      };
+      return {
+        pqNode: pqMap[compKey] || 'bus_a_138',
+        faultNode: faultMap[compKey] || 'node5_lv_bus',
+        slider: sliderMap[compKey] || null
+      };
+    }
+
     // TELEMETRY DRAWER RENDERING
     function renderTelemetryDrawer(compKey) {
       const data = SUBSTATION_DATA[compKey];
@@ -3503,6 +4845,30 @@ def get_js_app_core():
       document.getElementById('drawer-comp-name').innerText = data.name;
       const body = document.getElementById('drawer-content-body');
       body.innerHTML = '';
+
+      const qMeta = getInspectorQuickMeta(compKey);
+      const ms = AppState.mvaScaling || {};
+      const vsNow = getVoltageSpec(AppState.voltageClass);
+      const qBar = document.createElement('div');
+      qBar.style.cssText = 'display:flex;flex-direction:column;gap:6px;margin-bottom:10px;padding:8px;background:rgba(15,23,42,0.88);border:1px solid rgba(56,189,248,0.28);border-radius:7px;';
+      const curVal = qMeta.slider ? (qMeta.slider.key === 'txMvaOverride' ? (ms.txMvaOverride ?? vsNow.mva) : (ms[qMeta.slider.key] ?? qMeta.slider.min)) : null;
+      qBar.innerHTML = `
+        <div style="display:flex;gap:5px;flex-wrap:wrap;">
+          <button onclick="attachPqProbeToNode('${qMeta.pqNode}')" style="flex:1;min-width:120px;padding:5px 7px;background:rgba(6,182,212,0.16);border:1px solid rgba(6,182,212,0.5);color:#67e8f9;border-radius:5px;font-size:10.2px;font-weight:700;cursor:pointer;">🔬 Attach PQ Oscilloscope Probe</button>
+          <button onclick="triggerPinpointedFault('${qMeta.faultNode}', 50, null)" style="padding:5px 7px;background:rgba(244,63,94,0.16);border:1px solid rgba(244,63,94,0.5);color:#fda4af;border-radius:5px;font-size:10.2px;font-weight:700;cursor:pointer;">🎯 Inject Fault</button>
+          <button onclick="plotActiveFaultOnTcc('${qMeta.faultNode}')" style="padding:5px 7px;background:rgba(245,158,11,0.16);border:1px solid rgba(245,158,11,0.5);color:#fde68a;border-radius:5px;font-size:10.2px;font-weight:700;cursor:pointer;">📈 Plot TCC</button>
+        </div>
+        ${qMeta.slider ? `
+          <div style="display:flex;flex-direction:column;gap:3px;padding-top:4px;border-top:1px solid rgba(148,163,184,0.16);">
+            <div style="display:flex;justify-content:space-between;font-size:10px;color:#cbd5e1;">
+              <span>🎛️ ${qMeta.slider.label}</span>
+              <strong style="color:#fbbf24;font-family:monospace;">${curVal} ${qMeta.slider.unit} (${(ms.mode||'autosize').toUpperCase()})</strong>
+            </div>
+            <input type="range" min="${qMeta.slider.min}" max="${qMeta.slider.max}" step="${qMeta.slider.step}" value="${curVal}" oninput="updateMvaScalingControl('${qMeta.slider.key}', this.value)" style="width:100%;accent-color:#f59e0b;cursor:pointer;">
+          </div>
+        ` : ''}
+      `;
+      body.appendChild(qBar);
 
       if (AppState.currentDrawerTab === 'specs') {
         const grp = document.createElement('div');
@@ -3532,7 +4898,7 @@ def get_js_app_core():
               <strong style="color:#7dd3fc;">Normal Duty:</strong> ${calc.dutyNormal}<br>
               <strong style="color:#fca5a5;">Fault / Surge Duty:</strong> ${calc.dutyFault}
             </div>
-            <div class="spec-group-title" style="margin-top:8px;">41.7 MVA Worked Sizing Calculation</div>
+            <div class="spec-group-title" style="margin-top:8px;">Engineering Sizing Calculation &amp; Proof</div>
             <div style="display:flex; flex-direction:column; gap:5px;">
               ${calc.steps.map(st => `<div class="calc-step-box">${st}</div>`).join('')}
             </div>
@@ -3567,14 +4933,14 @@ def get_js_app_core():
         const grp = document.createElement('div');
         grp.className = 'spec-group';
         grp.innerHTML = `
-          <div class="spec-group-title">Curriculum Outcomes & Standards Mapping</div>
+          <div class="spec-group-title">Engineering Codes &amp; Design Standards Mapping</div>
           <p style="font-size: 11.5px; color: #cbd5e1; line-height: 1.6; margin-bottom: 8px;">
-            <strong>Course Learning Outcome:</strong> CLO2 (Substation Layouts & Apparatus Sizing)<br>
-            <strong>Program Graduate Outcome:</strong> PGO c [PI c.2 - Demonstrative]<br>
+            <strong>Design Domain:</strong> High-Voltage Substation Layouts &amp; Apparatus Sizing<br>
+            <strong>Simulation Scope:</strong> Steady-State Power Flow, Short-Circuit, Protection Coordination &amp; Field Walkdown<br>
             <strong>Governing Code:</strong> ${data.governingStandard}
           </p>
           <p style="font-size: 11px; color: #94a3b8; line-height: 1.5;">
-            Aligned with USeP BSEE Outcomes-Based Education (OBE) curriculum and CDIO framework (Conceive-Design-Implement-Operate).
+            Aligned with IEEE C37 / C57, IEEE Std 80 / 998, IEC 61850, and NESC utility engineering practices (CDIO Framework).
           </p>
         `;
         body.appendChild(grp);
@@ -3601,17 +4967,110 @@ def get_js_app_core():
       }
     }
 
-    // PER-UNIT POWER FLOW, VOLTAGE REGULATION & SHORT-CIRCUIT SEQUENCE ANALYSIS ENGINE
+    // DYNAMIC MVA EQUIPMENT SIZING, PER-UNIT BIDIRECTIONAL POWER FLOW & 23-NODE SHORT-CIRCUIT ENGINE
+    function computeDynamicEquipmentSizing(vSpec, txMva, totalLoadMva, subBMva, mode) {
+      const baseTxMva = Math.max(5, Number(txMva) || vSpec.mva || 50);
+      const hvKv = vSpec.hvKv || 69.0;
+      const lvKv = vSpec.distKv || vSpec.lvKv || 13.8;
+      const effectiveMode = (mode === 'stress') ? 'stress' : 'autosize';
+      const sizingMva = effectiveMode === 'autosize' ? Math.max(baseTxMva, totalLoadMva * 1.05) : (vSpec.mva || baseTxMva);
+
+      const iHvFl = (baseTxMva * 1000) / (Math.sqrt(3) * hvKv);
+      const iLvFl = (baseTxMva * 1000) / (Math.sqrt(3) * lvKv);
+      const refIHv = (sizingMva * 1000) / (Math.sqrt(3) * hvKv);
+      const refILv = (sizingMva * 1000) / (Math.sqrt(3) * lvKv);
+      const iLoadLv = (Math.max(0.05, totalLoadMva) * 1000) / (Math.sqrt(3) * lvKv);
+
+      const stdFrames = [600, 1200, 2000, 3000, 4000];
+      const pickFrame = (amps) => stdFrames.find(a => a >= amps * 1.25) || 4000;
+      const stdCts = [400, 600, 800, 1200, 1500, 2000, 3000, 4000];
+      const pickCt = (amps) => stdCts.find(c => c >= amps * 1.25) || 4000;
+
+      const brkHvAmp = pickFrame(refIHv);
+      const brkLvAmp = pickFrame(refILv);
+      const brkKa = sizingMva >= 100 ? Math.max(40, vSpec.lvCbKa || 40) : (sizingMva >= 60 ? 31.5 : 25.0);
+      const ctHvPri = pickCt(refIHv);
+      const ctLvPri = pickCt(refILv);
+      const fdrCtPri = pickCt(Math.max(250, refILv * 0.48));
+
+      const busbarSpec = brkLvAmp >= 3000
+        ? 'Dual 127×10 mm Al 6101-T61 (3000 A)'
+        : (brkLvAmp >= 2000 ? '100 mm IPS Sch 80 Al Pipe (2000 A)' : (brkLvAmp >= 1200 ? '75 mm IPS Sch 40 Al Pipe (1200 A)' : '63 mm IPS Al Pipe (800 A)'));
+
+      const txLoadPct = (totalLoadMva / Math.max(1, baseTxMva)) * 100;
+      const loadRatio = totalLoadMva / Math.max(1, baseTxMva);
+      const thetaAmb = 30.0;
+      const topOilRise = 45.0 * Math.pow((loadRatio * loadRatio * 5.5 + 1.0) / 6.5, 0.8);
+      const hotSpotRise = 23.0 * Math.pow(loadRatio, 1.6);
+      const thermalTopOilC = +(thetaAmb + topOilRise).toFixed(1);
+      const thermalHotSpotC = +(thetaAmb + topOilRise + hotSpotRise).toFixed(1);
+
+      const lvBusDropWarning = effectiveMode === 'stress' && txLoadPct > 105;
+      const ctSatWarning = effectiveMode === 'stress' && (iLoadLv > ctLvPri * 1.15);
+      const relay51Alert = effectiveMode === 'stress' && txLoadPct > 110;
+      const hotSpotAlarm = thermalHotSpotC > 110.0;
+
+      const overloadBadge = (effectiveMode === 'stress' && (txLoadPct > 100 || hotSpotAlarm))
+        ? `🚨 OVERLOAD ${txLoadPct.toFixed(0)}% · ΘH ${thermalHotSpotC}°C > 110°C${relay51Alert ? ' · ANSI 49/51 TRIP' : ''}`
+        : (effectiveMode === 'autosize'
+          ? `✅ AUTO-SIZED (${sizingMva.toFixed(0)} MVA · ${brkLvAmp}A VCB · ${brkKa}kA · CT ${ctLvPri}:5)`
+          : `🟢 NORMAL (${txLoadPct.toFixed(0)}% Load · ΘH ${thermalHotSpotC}°C)`);
+
+      const baseScaleRatio = +Math.max(0.68, Math.min(1.65, Math.pow(sizingMva / Math.max(1, vSpec.mva || 50), 0.25))).toFixed(3);
+      return {
+        mode: effectiveMode, txMva: baseTxMva, sizingMva, subBMva: Math.max(5, Number(subBMva) || 15),
+        iHvFl, iLvFl, iLoadLv, brkHvAmp, brkLvAmp, brkKa, ctHvPri, ctLvPri, fdrCtPri, busbarSpec,
+        thermalTopOilC, thermalHotSpotC, txLoadPct,
+        lvBusDropWarning, ctSatWarning, relay51Alert, hotSpotAlarm, overloadBadge, baseScaleRatio
+      };
+    }
+
     function computePowerFlowMetrics() {
       const vs = getVoltageSpec(AppState.voltageClass);
       const b = computeEnergizedBranches();
       const s = AppState.switchStates;
-      const baseMva = vs.mva;
+      const ms = AppState.mvaScaling || {};
+      const activeTxMva = Math.max(5, Number(ms.txMvaOverride != null ? ms.txMvaOverride : vs.mva) || vs.mva);
+      const subBRatedMva = Math.max(5, Number(ms.subBTxMva != null ? ms.subBTxMva : 15) || 15);
+      const baseMva = activeTxMva;
+      const distKv = vs.distKv || 13.8;
+      const indKv = vs.indSubKv || 69.0;
       const loadFrac = Math.max(0.05, (AppState.pfLoadPct || 100) / 100);
-      const feederScale = (b.fdr1 && b.fdr2) ? 1.0 : ((b.fdr1 || b.fdr2) ? 0.54 : (b.secMain ? 0.04 : 0.0));
-      const effFrac = b.txFeed ? (loadFrac * feederScale) : 0.0;
+      const trunkRatio = Math.max(0.5, vs.mva / 50.0);
 
-      const sLoadMva = baseMva * effFrac;
+      // 6 Individual Named Utility Load Districts + Feeder Trunk Background (gated by active BFS branch)
+      const resKva = b.dist_lateral ? Number(ms.resKva != null ? ms.resKva : 50) * loadFrac : 0.0;
+      const urdKva = (b.dist_f1_sec1 || b.dist_f1_sec2) ? Number(ms.urdKva != null ? ms.urdKva : 900) * loadFrac : 0.0;
+      const f1TrunkBgMva = b.dist_f1_sec2 ? (11.5 * trunkRatio * loadFrac) : 0.0;
+      const f1ZoneMva = (resKva + urdKva) / 1000.0 + f1TrunkBgMva;
+
+      const cbdKva = b.dist_f2_main ? Number(ms.cbdKva != null ? ms.cbdKva : 750) * loadFrac : 0.0;
+      const f2TrunkBgMva = b.dist_f2_main ? (13.8 * trunkRatio * loadFrac) : 0.0;
+      const f2ZoneMva = cbdKva / 1000.0 + f2TrunkBgMva;
+
+      const uniKva = b.dist_f3 ? Number(ms.uniKva != null ? ms.uniKva : 500) * loadFrac : 0.0;
+      const f3TrunkBgMva = b.dist_f3 ? (4.2 * loadFrac) : 0.0;
+      const f3ZoneMva = uniKva / 1000.0 + f3TrunkBgMva;
+
+      const munKva = b.dist_f4 ? Number(ms.munKva != null ? ms.munKva : 1000) * loadFrac : 0.0;
+      const f4TrunkBgMva = b.dist_f4 ? (4.8 * loadFrac) : 0.0;
+      const f4ZoneMva = munKva / 1000.0 + f4TrunkBgMva;
+
+      const indMva = (b.txFeed && b.ind_hv) ? Number(ms.indMva != null ? ms.indMva : (vs.indCustMva || 25.0)) * loadFrac : 0.0;
+
+      // Bidirectional Summation onto Active Substation (Sub A vs Sub B) across 79-TIE1 and 89-TIE2
+      const hasReachA = (node) => b.reachA ? (Array.isArray(b.reachA) ? b.reachA.includes(node) : b.reachA.has(node)) : false;
+      const f1ServedByA = hasReachA('fdr1_head') || (!b.fdr1_from_subB && b.secMain);
+      const f2ServedByA = hasReachA('fdr2_head') || (!b.fdr2_from_subB && b.secMain);
+      const subALocalCityMva = (f1ServedByA ? f1ZoneMva : 0) + (f2ServedByA ? f2ZoneMva : 0);
+      const subATransferMva = (b.fdr3_from_subA ? f3ZoneMva : 0) + (b.fdr4_from_subA ? f4ZoneMva : 0);
+      const subBLocalCityMva = (!b.fdr3_from_subA ? f3ZoneMva : 0) + (!b.fdr4_from_subA ? f4ZoneMva : 0);
+      const subBTransferMva = (b.fdr1_from_subB ? f1ZoneMva : 0) + (b.fdr2_from_subB ? f2ZoneMva : 0);
+
+      const sLoadMva = (b.txFeed && b.secMain) ? (subALocalCityMva + subATransferMva + 0.1) : (b.txFeed ? 0.1 : 0.0);
+      const sSubBMva = b.dist_sub_b ? (subBLocalCityMva + subBTransferMva) : 0.0;
+      const sSubAMva = sLoadMva;
+
       const pfLoad = Math.min(0.999, Math.max(0.5, AppState.pfPowerFactor || 0.92));
       const pLoadMw = sLoadMva * pfLoad;
       const qLoadMvar = sLoadMva * Math.sqrt(Math.max(0, 1 - pfLoad * pfLoad));
@@ -3621,98 +5080,171 @@ def get_js_app_core():
       const sNetMva = Math.hypot(pLoadMw, qNetMvar);
       const pfNet = sNetMva > 1e-4 ? Math.min(1.0, pLoadMw / sNetMva) : 1.0;
 
+      const sizing = computeDynamicEquipmentSizing(vs, activeTxMva, Math.max(sLoadMva, sNetMva), subBRatedMva, ms.mode || 'autosize');
+      if (sizing.mode === 'autosize' && typeof window.scale3DTransformerToMva === 'function') {
+        window.scale3DTransformerToMva(sizing.sizingMva, subBRatedMva);
+      } else if (typeof window.scale3DTransformerToMva === 'function') {
+        window.scale3DTransformerToMva(activeTxMva, subBRatedMva);
+      }
+
       const tapPu = 1.0 + ((AppState.oltcTapPct || 0) / 100.0);
       const vHvPu = b.incoming ? 1.00 : 0.0;
       const pPu = pLoadMw / baseMva;
       const qPu = qNetMvar / baseMva;
-      const deltaVPu = b.txFeed ? (pPu * vs.rPu + qPu * vs.xPu) : 0.0;
+      const extraLoopImpedanceFactor = (b.fdr3_from_subA || b.fdr4_from_subA) ? 0.018 * (subATransferMva / Math.max(5, baseMva)) * 3.0 : 0.0;
+      const deltaVPu = b.txFeed ? (pPu * vs.rPu + qPu * (vs.totalCascadeXPu || vs.xPu) + extraLoopImpedanceFactor) : 0.0;
       const vNoLoadPu = b.txFeed ? (vHvPu * tapPu) : 0.0;
       const vLvPu = b.txFeed ? Math.max(0.65, Math.min(1.18, vNoLoadPu - deltaVPu)) : 0.0;
 
+      // Also support West 13.8 kV Bus A voltage when Sub B back-feeds it with Sub A HV open
+      const backfedDrop = (b.subA_lv_backfed_from_B && !b.txFeed) ? Math.min(0.18, 0.028 * (sSubBMva / Math.max(5, subBRatedMva))) : 0.0;
+      const vDistPu = b.secMain ? vLvPu : (b.subA_lv_backfed_from_B ? Math.max(0.75, 1.0 - backfedDrop) : 0.0);
+
       const vHvKvActual = vs.hvKv * vHvPu;
       const vLvKvActual = vs.lvKv * vLvPu;
-      const vrPct = (vLvPu > 0.01) ? (((vNoLoadPu - vLvPu) / vLvPu) * 100.0) : 0.0;
+      const vDistKvActual = distKv * vDistPu;
+      const vrPct = (vLvPu > 0.01) ? (((vNoLoadPu - vLvPu) / vLvPu) * 100.0) : (backfedDrop * 100.0);
 
       const iPu = sNetMva / baseMva;
-      const pCuKw = b.txFeed ? (vs.pCuFullKw * iPu * iPu) : 0.0;
-      const pCoreKw = b.txFeed ? vs.pCoreKw : 0.0;
+      const pCuKw = b.txFeed ? (vs.pCuFullKw * (activeTxMva / vs.mva) * iPu * iPu) : 0.0;
+      const pCoreKw = b.txFeed ? (vs.pCoreKw * (activeTxMva / vs.mva)) : 0.0;
       const pLossKw = pCoreKw + pCuKw;
       const etaPct = (pLoadMw > 0.01 && b.txFeed) ? (((pLoadMw * 1000) / (pLoadMw * 1000 + pLossKw)) * 100.0) : 0.0;
 
-      const iHvA = b.txFeed ? ((sNetMva * 1000) / (Math.sqrt(3) * vs.hvKv * Math.max(0.5, vHvPu))) : 0.0;
+      const iHvA = b.txFeed ? (((sNetMva + indMva) * 1000) / (Math.sqrt(3) * vs.hvKv * Math.max(0.5, vHvPu))) : 0.0;
       const iLvA = (b.txFeed && b.secMain) ? ((sNetMva * 1000) / (Math.sqrt(3) * vs.lvKv * Math.max(0.5, vLvPu))) : 0.0;
+      const iDistBaseScale = 1000 / (Math.sqrt(3) * distKv * Math.max(0.5, vDistPu || 1.0));
+
+      // Actual carried MVA per feeder head (including cross-tie transfers!)
+      const f1CarriedMva = (b.fdr1 ? f1ZoneMva : 0) + (b.fdr3_from_subA ? f3ZoneMva : 0);
+      const f2CarriedMva = (b.fdr2 ? f2ZoneMva : 0) + (b.fdr4_from_subA ? f4ZoneMva : 0);
+      const f3CarriedMva = (b.dist_f3 && !b.fdr3_from_subA) ? (f3ZoneMva + (b.fdr1_from_subB ? f1ZoneMva : 0)) : (b.fdr3_from_subA && b.subB_lv_backfed_from_A ? f3ZoneMva : 0);
+      const f4CarriedMva = (b.dist_f4 && !b.fdr4_from_subA) ? (f4ZoneMva + (b.fdr2_from_subB ? f2ZoneMva : 0)) : (b.fdr4_from_subA && b.subB_lv_backfed_from_A ? f4ZoneMva : 0);
+
+      const iF1A = f1CarriedMva * iDistBaseScale;
+      const iF2A = f2CarriedMva * iDistBaseScale;
+      const iF3A = f3CarriedMva * iDistBaseScale;
+      const iF4A = f4CarriedMva * iDistBaseScale;
+      const iIndA = (b.txFeed && b.ind_hv) ? ((indMva * 1000) / (Math.sqrt(3) * indKv * Math.max(0.5, vHvPu))) : 0.0;
+      const loopDropPct = +((extraLoopImpedanceFactor + backfedDrop) * 100).toFixed(2);
 
       return {
-        vs, b, baseMva, loadPct: AppState.pfLoadPct, pfLoad, pfNet, capOn, qCapMvar,
-        sLoadMva, pLoadMw, qLoadMvar, qNetMvar, sNetMva,
+        vs, b, baseMva, activeTxMva, subBRatedMva, distKv, indKv, loadPct: AppState.pfLoadPct, pfLoad, pfNet, capOn, qCapMvar,
+        sLoadMva, sSubAMva, indMva, sSubBMva, subATransferMva, subBTransferMva, loopDropPct,
+        f1CarriedMva, f2CarriedMva, f3CarriedMva, f4CarriedMva,
+        pLoadMw, qLoadMvar, qNetMvar, sNetMva,
         tapPct: AppState.oltcTapPct, tapPu, deltaVPu, vNoLoadPu,
-        vHvPu, vLvPu, vHvKvActual, vLvKvActual, vrPct,
-        pCuKw, pCoreKw, pLossKw, etaPct, iHvA, iLvA,
+        vHvPu, vLvPu, vDistPu, vHvKvActual, vLvKvActual, vDistKvActual, vrPct,
+        pCuKw, pCoreKw, pLossKw, etaPct, iHvA, iLvA, iF1A, iF2A, iF3A, iF4A, iIndA,
+        sizing,
+        loadBreakdown: { resKva, urdKva, cbdKva, uniKva, munKva, indMva, f1ZoneMva, f2ZoneMva, f3ZoneMva, f4ZoneMva },
         pfLeadLag: qNetMvar >= 0 ? 'lag' : 'lead'
       };
     }
 
     function computeShortCircuitMetrics() {
       const vs = getVoltageSpec(AppState.voltageClass);
-      const loc = AppState.scFaultLoc || 'lv_bus';
+      const b = computeEnergizedBranches();
+      const ms = AppState.mvaScaling || {};
+      const activeTxMva = Math.max(5, Number(ms.txMvaOverride != null ? ms.txMvaOverride : vs.mva) || vs.mva);
+      const subBRatedMva = Math.max(5, Number(ms.subBTxMva != null ? ms.subBTxMva : 15) || 15);
+      const distKv = vs.distKv || 13.8;
+      const indKv = vs.indSubKv || 69.0;
+      const loc = AppState.scFaultLoc || 'node5_lv_bus';
       const ftype = AppState.scFaultType || '3ph';
       const ngrOn = !!AppState.scNgrGrounded;
-      const baseMva = vs.mva;
 
-      let vBaseKv = vs.lvKv;
-      let cbRatingKa = vs.lvCbKa;
+      const meta = PINPOINT_FAULT_NODES[loc] || null;
+      const sizing = computeDynamicEquipmentSizing(vs, activeTxMva, activeTxMva, subBRatedMva, ms.mode || 'autosize');
+      const txImpScale = vs.mva / activeTxMva;
+      let baseMva = activeTxMva;
+      let vBaseKv = distKv;
+      let cbRatingKa = sizing.mode === 'autosize' ? sizing.brkKa : 31.5;
       let z1 = vs.z1SysPu;
       let z2 = vs.z1SysPu;
       let z0 = vs.z0SysPu;
-      let locLabel = `${vs.lvKv} kV Secondary Main Bus`;
+      let xrRatio = (meta && meta.xrRatio) ? meta.xrRatio : 11.2;
+      let locLabel = (meta && meta.name) ? meta.name : `${distKv} kV Public Distribution Main Bus`;
+
+      const pctDist = Math.max(5, Math.min(100, AppState.pinpointFeederDistPct || (meta && meta.defaultDistPct) || 50));
+      const fracDist = pctDist / 100;
 
       if (loc === 'node1_incoming') {
-        vBaseKv = vs.hvKv;
-        cbRatingKa = vs.hvCbKa;
-        z1 = vs.z1SysPu * 0.92;
-        z2 = z1;
-        z0 = vs.z0SysPu * 0.92;
-        locLabel = `${vs.hvKv} kV Incoming Line / Gantry Dead-End`;
+        vBaseKv = vs.hvKv; cbRatingKa = vs.hvCbKa; xrRatio = 16.0;
+        z1 = vs.z1SysPu * 0.92; z2 = z1; z0 = vs.z0SysPu * 0.92;
+      } else if (loc === 'node_cascade_mid') {
+        vBaseKv = vs.stageKvs && vs.stageKvs.length > 2 ? vs.stageKvs[1] : vs.hvKv;
+        cbRatingKa = vs.hvCbKa; xrRatio = 15.0;
+        z1 = vs.z1SysPu + 0.42 * vs.xPu * txImpScale; z2 = z1; z0 = vs.z0SysPu + 0.35 * vs.z0TxPu * txImpScale;
       } else if (loc === 'hv_bus' || loc === 'node2_hv_bus') {
-        vBaseKv = vs.hvKv;
-        cbRatingKa = vs.hvCbKa;
-        z1 = vs.z1SysPu;
-        z2 = vs.z1SysPu;
-        z0 = vs.z0SysPu;
-        locLabel = `${vs.hvKv} kV Primary HV Bus`;
+        vBaseKv = vs.hvKv; cbRatingKa = vs.hvCbKa; xrRatio = 14.5;
+        z1 = vs.z1SysPu; z2 = z1; z0 = vs.z0SysPu;
       } else if (loc === 'node3_tx_hv') {
-        vBaseKv = vs.hvKv;
-        cbRatingKa = vs.hvCbKa;
-        z1 = vs.z1SysPu + 0.08 * vs.xPu;
+        vBaseKv = vs.hvKv; cbRatingKa = vs.hvCbKa; xrRatio = 14.0;
+        z1 = vs.z1SysPu + 0.08 * vs.xPu * txImpScale; z2 = z1; z0 = vs.z0SysPu + 0.08 * vs.z0TxPu * txImpScale;
+      } else if (loc === 'node7_ind_hv' || loc === 'node8_ind_sub') {
+        vBaseKv = indKv; cbRatingKa = indKv >= 138 ? 40.0 : 31.5; baseMva = 100.0;
+        const pctInd = loc === 'node8_ind_sub' ? 100 : pctDist;
+        const fInd = pctInd / 100;
+        const zBaseInd = (vBaseKv * vBaseKv) / baseMva;
+        const zStageUp = (indKv >= vs.hvKv) ? 0.0 : 0.08;
+        const subXfmZ = (loc === 'node8_ind_sub') ? (0.095 * (100 / Math.max(5, Number(ms.indMva || 25)))) : 0.0;
+        z1 = vs.z1SysPu + zStageUp + fInd * (1.85 / zBaseInd) + subXfmZ;
         z2 = z1;
-        z0 = vs.z0SysPu + 0.08 * vs.z0TxPu;
-        locLabel = `TR-01 Primary ${vs.hvKv} kV Bushing`;
-      } else {
-        vBaseKv = vs.lvKv;
-        cbRatingKa = vs.lvCbKa;
+        z0 = vs.z0SysPu + zStageUp + fInd * (4.60 / zBaseInd) + subXfmZ;
+        xrRatio = loc === 'node8_ind_sub' ? 7.8 : 9.5;
+        locLabel = `${meta.name} (${pctInd}%)`;
+      } else if (loc === 'node4_tx_lv') {
+        vBaseKv = vs.lvKv; cbRatingKa = sizing.mode === 'autosize' ? sizing.brkKa : vs.lvCbKa; xrRatio = 12.0;
         const zBaseOhms = (vBaseKv * vBaseKv) / baseMva;
         const rNgrPu = vs.ngrOhms / zBaseOhms;
         const threeZn = ngrOn ? (3 * rNgrPu) : 1e6;
-        if (loc === 'node4_tx_lv') {
-          z1 = vs.z1SysPu + 0.95 * vs.xPu;
-          z2 = z1;
-          z0 = 0.95 * vs.z0TxPu + threeZn;
-          locLabel = `TR-01 Secondary ${vs.lvKv} kV Bushing / NGR`;
+        z1 = vs.z1SysPu + 0.95 * vs.xPu * txImpScale; z2 = z1; z0 = 0.95 * vs.z0TxPu * txImpScale + threeZn;
+      } else if (loc === 'node17_subb_hv' || loc === 'node18_tr02' || loc === 'node19_subb_lv' || loc === 'node20_fdr3' || loc === 'node21_fdr4') {
+        baseMva = subBRatedMva;
+        if (loc === 'node17_subb_hv') {
+          vBaseKv = vs.hvKv; cbRatingKa = vs.hvCbKa; xrRatio = 13.5;
+          z1 = vs.z1SysPu * 1.15; z2 = z1; z0 = vs.z0SysPu * 1.15;
         } else {
-          z1 = vs.z1SysPu + vs.xPu;
+          vBaseKv = distKv; cbRatingKa = 25.0;
+          const zBaseB = (vBaseKv * vBaseKv) / baseMva;
+          const threeZnB = ngrOn ? (3 * (10.0 / zBaseB)) : 1e6;
+          const xTr02Pu = 0.075 * (15.0 / subBRatedMva);
+          const extraKm = (loc === 'node20_fdr3' || loc === 'node21_fdr4') ? (0.45 * fracDist) : 0.0;
+          const bfPenalty = ((loc === 'node20_fdr3' && b.fdr3_from_subA) || (loc === 'node21_fdr4' && b.fdr4_from_subA)) ? (1.15 / zBaseB) : 0.0;
+          z1 = vs.z1SysPu + xTr02Pu + (extraKm * 0.78) / zBaseB + bfPenalty;
           z2 = z1;
-          z0 = vs.z0TxPu + threeZn;
-          if (loc === 'fdr1_end' || loc === 'node6_fdr1' || loc === 'node6_fdr2') {
-            const pct = (loc === 'fdr1_end') ? 100 : Math.max(5, Math.min(100, AppState.pinpointFeederDistPct || 50));
-            const frac = pct / 100;
-            const z1FdrPu = frac * (0.78 / zBaseOhms);
-            const z0FdrPu = frac * (2.20 / zBaseOhms);
-            z1 += z1FdrPu;
-            z2 += z1FdrPu;
-            z0 += z0FdrPu;
-            const fName = loc === 'node6_fdr2' ? 'Feeder 02' : 'Feeder 01';
-            locLabel = `${vs.lvKv} kV ${fName} (${pct}% / ${(frac * 2.0).toFixed(2)} km ACSR)`;
-          }
+          z0 = xTr02Pu + threeZnB + (extraKm * 2.20) / zBaseB + bfPenalty * 2.2;
+          xrRatio = loc === 'node18_tr02' ? 11.5 : (loc === 'node19_subb_lv' ? 10.2 : 6.1);
+        }
+      } else {
+        // 13.8 kV Main Bus A & West/Tie/East Distribution Corridors
+        vBaseKv = distKv;
+        baseMva = Math.min(41.7, activeTxMva);
+        const zBaseOhms = (vBaseKv * vBaseKv) / baseMva;
+        const rNgrPu = 10.0 / zBaseOhms;
+        const threeZn = ngrOn ? (3 * rNgrPu) : 1e6;
+        const cascadeX = (vs.totalCascadeXPu || vs.xPu) * txImpScale;
+        z1 = vs.z1SysPu + cascadeX;
+        z2 = z1;
+        z0 = vs.z0TxPu * txImpScale + threeZn;
+
+        const distKmMap = {
+          lv_bus: 0, node5_lv_bus: 0,
+          node6_fdr1: 0.7 * fracDist, node6_fdr2: 0.8 * fracDist, fdr1_end: 2.0,
+          node9_acr1: 1.0 * fracDist, node11_urd_pad: 1.35 * fracDist, node10_res_lat: 1.85 * fracDist,
+          node12_cbd_bus: 1.75 * fracDist,
+          node13_tie1: 2.15 * fracDist, node14_tie2: 2.15 * fracDist,
+          node15_uni_bus: b.fdr3_from_subA ? 2.55 : 0.85 * fracDist,
+          node16_mun_bus: b.fdr4_from_subA ? 2.55 : 0.90 * fracDist
+        };
+        const km = distKmMap[loc] != null ? distKmMap[loc] : 0;
+        if (km > 0) {
+          const z1FdrPu = (km * 0.42) / zBaseOhms;
+          const z0FdrPu = (km * 1.18) / zBaseOhms;
+          z1 += z1FdrPu; z2 += z1FdrPu; z0 += z0FdrPu;
+          xrRatio = Math.max(2.8, 10.5 - km * 3.1);
+          locLabel = `${meta ? meta.name : loc} (${km.toFixed(2)} km)`;
         }
       }
 
@@ -3731,7 +5263,6 @@ def get_js_app_core():
         iSeq2 = -iSeq1;
         iFaultPu = Math.sqrt(3) * iSeq1;
       } else {
-        // Double Line-to-Ground (DLG)
         const zPar = (z2 * z0) / (z2 + z0);
         iSeq1 = 1 / (z1 + zPar);
         iSeq2 = -iSeq1 * (z0 / (z2 + z0));
@@ -3742,49 +5273,91 @@ def get_js_app_core():
       }
 
       const iSymKa = iFaultPu * iBaseKa;
-      const iPeakKa = iSymKa * 2.55;
+      const asymFactor = 1.0 + Math.exp(-Math.PI / Math.max(1.5, xrRatio));
+      const iPeakKa = iSymKa * Math.sqrt(2) * (1.0 + 0.85 * Math.exp(-Math.PI / Math.max(1.5, xrRatio)));
       const sScMva = Math.sqrt(3) * vBaseKv * iSymKa;
       const dutyPass = iSymKa <= cbRatingKa;
+      const upstreamDevices = (meta && typeof meta.upstreamDevices === 'function')
+        ? meta.upstreamDevices(b)
+        : ['50/51-F1', '50/51-LV Main', '51-HV'];
 
       return {
-        vs, loc, locLabel, ftype, ngrOn, vBaseKv, baseMva, iBaseKa,
-        z1, z2, z0, iSeq1, iSeq2, iSeq0, iFaultPu,
-        iSymKa, iPeakKa, sScMva, cbRatingKa, dutyPass
+        vs, b, loc, locLabel, ftype, ngrOn, vBaseKv, baseMva, iBaseKa,
+        z1, z2, z0, xrRatio, asymFactor, iSeq1, iSeq2, iSeq0, iFaultPu,
+        iSymKa, iPeakKa, sScMva, cbRatingKa, dutyPass, upstreamDevices
       };
+    }
+
+    function toggleLiveTelemetryDrawer(forceState) {
+      const drawer = document.getElementById('live-telemetry-drawer');
+      const btn = document.getElementById('btn-telem-drawer');
+      if (!drawer) return;
+      const next = (forceState !== undefined) ? !!forceState : !drawer.classList.contains('open');
+      AppState.liveTelemetryOpen = next;
+      drawer.classList.toggle('open', next);
+      if (btn) btn.classList.toggle('active', next);
     }
 
     function updateSubtitleAndTelemetry() {
       const pf = computePowerFlowMetrics();
       const vs = pf.vs;
+      const s = AppState.switchStates;
 
       const sub = document.getElementById('subtitle-rating');
       if (sub) {
-        sub.innerText = `Distribution Systems & Substation Design | Regional Substation "Obrero" (${vs.hvKv} kV / ${vs.lvKv} kV, ${vs.mva} MVA ${vs.vectorGroup})`;
+        sub.innerText = `Substation and Distribution Simulation | Sub A (${AppState.busTopology.toUpperCase()}/${AppState.enclosureType.toUpperCase()}) ⇄ Tie Sub B (${(AppState.subBTopology || 'ring').toUpperCase()}/${(AppState.subBEnclosure || 'ais').toUpperCase()}) · ${vs.cascadeLabel || (vs.hvKv + '/' + pf.distKv + ' kV')} · ${pf.indKv} kV Ind`;
       }
+      if (typeof syncTargetSubstationUI === 'function') syncTargetSubstationUI();
 
       const elSt = document.getElementById('telem-grid-status');
+      const elCompactPill = document.getElementById('telem-compact-pill');
+      const elCompactKv = document.getElementById('telem-compact-kv');
       const elHvV = document.getElementById('telem-hv-voltage');
       const elHvPu = document.getElementById('telem-hv-pu');
       const elLvV = document.getElementById('telem-lv-voltage');
       const elLvPu = document.getElementById('telem-lv-pu');
       const elVr = document.getElementById('telem-vr');
       const elI = document.getElementById('telem-current');
+      const elFdrI = document.getElementById('telem-feeder-currents');
+      const elTieSt = document.getElementById('telem-tie-status');
       const elP = document.getElementById('telem-power');
+      const elMwMvar = document.getElementById('telem-mw-mvar');
+      const elFreqRg = document.getElementById('telem-freq-rg');
+      const elGprLive = document.getElementById('telem-gpr-live');
 
       if (elSt && !AppState.isFaultActive) {
-        elSt.innerText = pf.b.txFeed ? (pf.b.secMain ? 'ENERGIZED' : `${vs.lvKv}kV OPEN`) : 'ISOLATED';
-        elSt.style.color = pf.b.txFeed ? '#38bdf8' : '#f59e0b';
+        elSt.innerText = pf.b.txFeed ? (pf.b.secMain ? 'ENERGIZED' : `${pf.distKv}kV OPEN`) : 'ISOLATED';
+        elSt.style.color = pf.b.txFeed ? '#a7f3d0' : '#fde68a';
       }
+      if (elCompactPill) {
+        elCompactPill.classList.toggle('fault', !!AppState.isFaultActive);
+        elCompactPill.classList.toggle('deenergized', !AppState.isFaultActive && (!pf.b.txFeed || !pf.b.secMain));
+      }
+      if (elCompactKv) elCompactKv.innerText = `${pf.vHvKvActual.toFixed(0)}→${pf.vDistKvActual.toFixed(1)} kV`;
       if (elHvV) elHvV.innerText = `${pf.vHvKvActual.toFixed(1)} kV`;
       if (elHvPu) elHvPu.innerText = `(${pf.vHvPu.toFixed(2)} pu)`;
-      if (elLvV) elLvV.innerText = `${pf.vLvKvActual.toFixed(2)} kV`;
-      if (elLvPu) elLvPu.innerText = `(${pf.vLvPu.toFixed(2)} pu)`;
+      if (elLvV) elLvV.innerText = `${pf.vDistKvActual.toFixed(2)} kV`;
+      if (elLvPu) elLvPu.innerText = `(${pf.vDistPu.toFixed(2)} pu)`;
       if (elVr) {
         elVr.innerText = `VR ${pf.vrPct.toFixed(1)}%`;
         elVr.style.color = Math.abs(pf.vrPct) <= 5.0 ? '#10b981' : '#f59e0b';
       }
-      if (elI) elI.innerText = `${pf.iHvA.toFixed(1)} / ${pf.iLvA.toFixed(0)} A`;
-      if (elP) elP.innerText = `${pf.sNetMva.toFixed(1)} MVA | PF ${pf.pfNet.toFixed(2)}`;
+      if (elI) elI.innerText = `HV ${pf.iHvA.toFixed(0)}A | IND ${pf.iIndA.toFixed(0)}A`;
+      if (elFdrI) elFdrI.innerText = `F1:${pf.iF1A.toFixed(0)}A F2:${pf.iF2A.toFixed(0)}A | SubB F3:${pf.iF3A.toFixed(0)}A F4:${pf.iF4A.toFixed(0)}A`;
+      if (elTieSt) {
+        const xferTag = pf.b.fdr3_from_subA || pf.b.fdr4_from_subA
+          ? ` | SUB A→E:+${pf.subATransferMva.toFixed(1)}MVA`
+          : (pf.b.fdr1_from_subB || pf.b.fdr2_from_subB ? ` | SUB B→W:+${pf.subBTransferMva.toFixed(1)}MVA` : '');
+        elTieSt.innerText = `79-TIE1:${s.cbTieB ? 'CLS' : 'NO'} | 89-TIE2:${s.cbTie2 ? 'CLS' : 'NO'} | 52-IND:${pf.b.ind_hv ? pf.indKv + 'kV' : 'OPN'}${xferTag}`;
+      }
+      if (elP) elP.innerText = `${pf.sNetMva.toFixed(1)} MVA | SubB:${pf.sSubBMva.toFixed(1)} MVA | PF ${pf.pfNet.toFixed(2)}`;
+      if (elMwMvar) elMwMvar.innerText = `P=${pf.pLoadMw.toFixed(1)} MW | Q=${pf.qNetMvar >= 0 ? '+' : ''}${pf.qNetMvar.toFixed(1)} MVAR | Loop ΔV=${pf.loopDropPct.toFixed(1)}%`;
+      if (elFreqRg) elFreqRg.innerText = `60.00 Hz | 0.842 Ω | ΘH=${pf.sizing ? pf.sizing.thermalHotSpotC : 78}°C`;
+      if (elGprLive) {
+        const gprV = AppState.isFaultActive ? (19800 * 0.842 * 0.12).toFixed(0) : Math.max(12, pf.iHvA * 0.052).toFixed(0);
+        const stressNote = (pf.sizing && pf.sizing.mode === 'stress' && pf.sizing.txLoadPct > 100) ? ` | 🚨 TR-01 ${pf.sizing.txLoadPct.toFixed(0)}%` : '';
+        elGprLive.innerText = `Live GPR: ${gprV} V (${Number(gprV) < 2800 ? 'IEEE 80 Safe' : 'ELEVATED'})${stressNote}`;
+      }
       if (typeof updateLandAreaUI === 'function') updateLandAreaUI();
     }
 
@@ -3852,14 +5425,86 @@ def get_js_app_core():
       renderAnalysisModalBody();
     }
 
+    window.updateMvaScalingControl = function(key, val) {
+      if (!AppState.mvaScaling) AppState.mvaScaling = {};
+      if (key === 'reset') {
+        const vs = getVoltageSpec(AppState.voltageClass);
+        AppState.mvaScaling = {
+          mode: AppState.mvaScaling.mode || 'autosize',
+          txMvaOverride: vs.mva, subBTxMva: 15,
+          resKva: 50, urdKva: 900, cbdKva: 750, uniKva: 500, munKva: 1000, indMva: vs.indCustMva || 25.0
+        };
+      } else if (key === 'mode') {
+        AppState.mvaScaling.mode = (val === 'stress') ? 'stress' : 'autosize';
+      } else if (key === 'txMvaOverride') {
+        AppState.mvaScaling.txMvaOverride = (val === null || val === 'auto') ? null : parseFloat(val);
+      } else {
+        AppState.mvaScaling[key] = parseFloat(val);
+      }
+      updateSubtitleAndTelemetry();
+      renderLiveSLD();
+      if (typeof renderTelemetryDrawer === 'function' && AppState.selectedComponent) {
+        renderTelemetryDrawer(AppState.selectedComponent);
+      }
+      const modal = document.getElementById('analysis-modal');
+      if (modal && modal.style.display === 'flex') renderAnalysisModalBody();
+    };
+
     function updateScLabControl(key, val) {
-      if (key === 'loc') AppState.scFaultLoc = val;
-      else if (key === 'type') AppState.scFaultType = val;
-      else if (key === 'ngr') {
+      if (key === 'loc') {
+        AppState.scFaultLoc = val;
+        if (PINPOINT_FAULT_NODES[val]) AppState.pinpointFaultNode = val;
+      } else if (key === 'type') {
+        AppState.scFaultType = val;
+      } else if (key === 'ngr') {
         AppState.scNgrGrounded = (val === 'ngr' || val === true);
         renderLiveSLD();
       }
       renderAnalysisModalBody();
+    }
+
+    function drawScMiniTccPreview(canvas, sc, sched) {
+      const ctx = canvas ? canvas.getContext('2d') : null;
+      if (!ctx) return;
+      const W = canvas.width, H = canvas.height;
+      const padL = 36, padR = 12, padT = 10, padB = 22;
+      const plotW = W - padL - padR, plotH = H - padT - padB;
+      const logMinI = 2.0, logMaxI = 4.9, logMinT = -2.0, logMaxT = 2.2;
+      const xOf = (a) => padL + ((Math.log10(Math.max(100, a)) - logMinI) / (logMaxI - logMinI)) * plotW;
+      const yOf = (t) => padT + ((logMaxT - Math.log10(Math.max(0.01, Math.min(160, t)))) / (logMaxT - logMinT)) * plotH;
+
+      ctx.fillStyle = '#020617';
+      ctx.fillRect(0, 0, W, H);
+      ctx.strokeStyle = 'rgba(56,189,248,0.16)';
+      ctx.lineWidth = 0.7;
+      for (let d = 2; d <= 4; d++) {
+        const x = xOf(Math.pow(10, d));
+        ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, padT + plotH); ctx.stroke();
+        ctx.fillStyle = '#64748b'; ctx.font = '8px monospace'; ctx.textAlign = 'center';
+        ctx.fillText(`${Math.pow(10, d) >= 1000 ? Math.pow(10, d)/1000+'kA' : Math.pow(10, d)+'A'}`, x, H - 6);
+      }
+      const refSide = sc.vBaseKv > (sched.vs.lvKv * 1.4) ? 'hv' : 'lv';
+      const evFn = (a) => evaluateTccAtCurrent(a, sched, AppState.busTopology, refSide, false);
+      [['#a855f7', (e) => e.tRecFast], ['#fb923c', (e) => e.tFuseClear], ['#4ade80', (e) => e.tFdr], ['#fbbf24', (e) => e.tLv], ['#38bdf8', (e) => e.tTopo]].forEach(([col, fn]) => {
+        ctx.strokeStyle = col; ctx.lineWidth = 1.6; ctx.beginPath();
+        let st = false;
+        for (let i = 0; i <= 100; i++) {
+          const amp = Math.pow(10, logMinI + (i / 100) * (logMaxI - logMinI));
+          const t = fn(evFn(amp));
+          if (t == null || t > 160 || t < 0.01) { st = false; continue; }
+          const px = xOf(amp), py = yOf(t);
+          if (!st) { ctx.moveTo(px, py); st = true; } else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+      });
+      const iF = Math.max(100, Math.min(75000, sc.iSymKa * 1000));
+      const fx = xOf(iF);
+      ctx.save(); ctx.strokeStyle = '#f43f5e'; ctx.lineWidth = 1.6; ctx.setLineDash([4, 3]);
+      ctx.beginPath(); ctx.moveTo(fx, padT); ctx.lineTo(fx, padT + plotH); ctx.stroke();
+      ctx.restore();
+      ctx.fillStyle = '#fda4af'; ctx.font = 'bold 8.5px monospace';
+      ctx.textAlign = fx > W - 80 ? 'right' : 'left';
+      ctx.fillText(`If=${sc.iSymKa.toFixed(2)}kA`, fx + (fx > W - 80 ? -3 : 3), padT + 9);
     }
 
     function renderAnalysisModalBody() {
@@ -3868,14 +5513,19 @@ def get_js_app_core():
       if (AppState.activeAnalysisTab === 'pf') {
         const pf = computePowerFlowMetrics();
         const vs = pf.vs;
-        const lvCol = pf.vLvPu < 0.95 ? '#ef4444' : (pf.vLvPu > 1.05 ? '#f59e0b' : '#10b981');
+        const ms = AppState.mvaScaling || {};
+        const sz = pf.sizing || {};
+        const lvCol = pf.vDistPu < 0.92 ? '#ef4444' : (pf.vDistPu > 1.05 ? '#f59e0b' : '#10b981');
+        const lb = pf.loadBreakdown || {};
+        const curTr01 = ms.txMvaOverride != null ? ms.txMvaOverride : vs.mva;
+        const curTr02 = ms.subBTxMva != null ? ms.subBTxMva : 15;
         body.innerHTML = `
           <div class="analysis-grid">
             <div class="analysis-panel">
-              <h4>Operating Controls (${vs.shortLabel}, ${vs.mva} MVA)</h4>
+              <h4>Operating Controls (${vs.shortLabel}, TR-01 = ${curTr01} MVA)</h4>
               <div class="analysis-slider-row">
-                <label>Feeder Load Demand <span>${pf.loadPct}% (${pf.sLoadMva.toFixed(1)} MVA)</span></label>
-                <input type="range" min="25" max="125" step="5" value="${pf.loadPct}" oninput="updatePfLabControl('load', this.value)">
+                <label>Feeder Load Multiplier <span>${pf.loadPct}% (${pf.sLoadMva.toFixed(1)} MVA)</span></label>
+                <input type="range" min="25" max="150" step="5" value="${pf.loadPct}" oninput="updatePfLabControl('load', this.value)">
               </div>
               <div class="analysis-slider-row">
                 <label>Native Load Power Factor <span>${pf.pfLoad.toFixed(2)} lag</span></label>
@@ -3885,7 +5535,7 @@ def get_js_app_core():
                 <label>TR-01 OLTC Tap Changer <span>${pf.tapPct >= 0 ? '+' : ''}${pf.tapPct.toFixed(2)}% (${pf.tapPu.toFixed(4)} pu)</span></label>
                 <input type="range" min="-10" max="10" step="1.25" value="${pf.tapPct}" oninput="updatePfLabControl('tap', this.value)">
               </div>
-              <div class="analysis-slider-row" style="margin-top:8px;">
+              <div class="analysis-slider-row" style="margin-top:6px;">
                 <label>Shunt Capacitor Bank (52-CAP: ${vs.capMvar} MVAR)
                   <button class="btn" style="padding:3px 10px; font-size:10.5px; background:${pf.capOn?'rgba(16,185,129,0.22)':'rgba(239,68,68,0.22)'};" onclick="updatePfLabControl('cap', ${!pf.capOn})">
                     ${pf.capOn ? 'CAP BANK IN (ON)' : 'CAP BANK OUT (OFF)'}
@@ -3897,42 +5547,91 @@ def get_js_app_core():
                 <text x="58" y="34" fill="#38bdf8" font-size="9" text-anchor="middle" font-family="monospace">${pf.vHvPu.toFixed(3)} pu (${pf.vHvKvActual.toFixed(1)} kV)</text>
                 <circle cx="130" cy="48" r="14" fill="none" stroke="#38bdf8" stroke-width="2"/>
                 <circle cx="148" cy="48" r="14" fill="none" stroke="#f59e0b" stroke-width="2"/>
-                <text x="139" y="75" fill="#94a3b8" font-size="8" text-anchor="middle" font-family="monospace">Tap ${pf.tapPct>=0?'+':''}${pf.tapPct.toFixed(2)}%</text>
+                <text x="139" y="75" fill="#94a3b8" font-size="8" text-anchor="middle" font-family="monospace">TR-01: ${curTr01}MVA (${pf.tapPct>=0?'+':''}${pf.tapPct.toFixed(1)}%)</text>
                 <line x1="162" y1="48" x2="275" y2="48" stroke="${lvCol}" stroke-width="3"/>
-                <text x="225" y="34" fill="${lvCol}" font-size="9" text-anchor="middle" font-family="monospace">${pf.vLvPu.toFixed(3)} pu (${pf.vLvKvActual.toFixed(2)} kV)</text>
+                <text x="225" y="34" fill="${lvCol}" font-size="9" text-anchor="middle" font-family="monospace">${pf.vDistPu.toFixed(3)} pu (${pf.vDistKvActual.toFixed(2)} kV)</text>
                 <rect x="275" y="34" width="68" height="28" rx="4" fill="#0f172a" stroke="#10b981"/>
                 <text x="309" y="47" fill="#f1f5f9" font-size="8.5" text-anchor="middle" font-family="monospace">${pf.pLoadMw.toFixed(1)} MW</text>
                 <text x="309" y="57" fill="#2dd4bf" font-size="8" text-anchor="middle" font-family="monospace">${pf.qNetMvar.toFixed(1)} MVAR</text>
               </svg>
+              <div style="margin-top:8px; padding:7px 9px; background:rgba(15,23,42,0.85); border-radius:6px; border:1px solid rgba(56,189,248,0.22); font-size:10px; line-height:1.45;">
+                <strong style="color:#67e8f9;">🔄 ${pf.b.loopModeBanner}</strong><br>
+                Sub A: <strong>${pf.sSubAMva.toFixed(2)} MVA</strong> (East Xfer: +${pf.subATransferMva.toFixed(2)}) · Sub B: <strong>${pf.sSubBMva.toFixed(2)} MVA</strong> (West Xfer: +${pf.subBTransferMva.toFixed(2)}) · Loop ΔV: <strong>${pf.loopDropPct.toFixed(2)}%</strong>
+              </div>
             </div>
             <div class="analysis-panel">
-              <h4>Calculated Per-Unit & Efficiency Results</h4>
+              <h4>Calculated Per-Unit &amp; Thermal Results</h4>
               <div class="analysis-kpi-grid">
-                <div class="analysis-kpi"><span>Active / Reactive Load</span><strong>${pf.pLoadMw.toFixed(2)} MW / ${pf.qNetMvar.toFixed(2)} MVAR</strong></div>
-                <div class="analysis-kpi"><span>Net Apparent S & PF</span><strong>${pf.sNetMva.toFixed(2)} MVA (${pf.pfNet.toFixed(3)} ${pf.pfLeadLag})</strong></div>
-                <div class="analysis-kpi"><span>Impedance Drop ΔV_pu</span><strong>${(pf.deltaVPu * 100).toFixed(2)} % (Z = ${vs.rPu}+j${vs.xPu})</strong></div>
-                <div class="analysis-kpi"><span>Secondary Voltage</span><strong style="color:${lvCol};">${pf.vLvKvActual.toFixed(2)} kV (${pf.vLvPu.toFixed(3)} pu)</strong></div>
-                <div class="analysis-kpi"><span>Voltage Regulation (%VR)</span><strong>${pf.vrPct.toFixed(2)} %</strong></div>
-                <div class="analysis-kpi"><span>Transformer Efficiency (η)</span><strong style="color:#10b981;">${pf.etaPct.toFixed(2)} %</strong></div>
-                <div class="analysis-kpi"><span>Total Losses (Pcore+Pcu)</span><strong>${pf.pCoreKw.toFixed(0)} + ${pf.pCuKw.toFixed(1)} = ${pf.pLossKw.toFixed(1)} kW</strong></div>
-                <div class="analysis-kpi"><span>HV / LV Phase Current</span><strong>${pf.iHvA.toFixed(1)} A / ${pf.iLvA.toFixed(0)} A</strong></div>
+                <div class="analysis-kpi"><span>Active / Reactive (Sub A)</span><strong>${pf.pLoadMw.toFixed(2)} MW / ${pf.qNetMvar.toFixed(2)} MVAR</strong></div>
+                <div class="analysis-kpi"><span>Net Apparent S &amp; PF</span><strong>${pf.sNetMva.toFixed(2)} MVA (${pf.pfNet.toFixed(3)} ${pf.pfLeadLag})</strong></div>
+                <div class="analysis-kpi"><span>Secondary Voltage</span><strong style="color:${lvCol};">${pf.vDistKvActual.toFixed(2)} kV (${pf.vDistPu.toFixed(3)} pu)</strong></div>
+                <div class="analysis-kpi"><span>%VR &amp; Efficiency (η)</span><strong style="color:#10b981;">${pf.vrPct.toFixed(2)}% · ${pf.etaPct.toFixed(2)}%</strong></div>
+                <div class="analysis-kpi"><span>Feeder F1 / F2 Amps</span><strong>${pf.iF1A.toFixed(0)} A / ${pf.iF2A.toFixed(0)} A</strong></div>
+                <div class="analysis-kpi"><span>Sub B F3 / F4 Amps</span><strong>${pf.iF3A.toFixed(0)} A / ${pf.iF4A.toFixed(0)} A</strong></div>
+                <div class="analysis-kpi"><span>TR-01 Thermal (C57.91)</span><strong style="color:${sz.hotSpotAlarm?'#f87171':'#fde68a'};">Oil ${sz.thermalTopOilC}°C | ΘH ${sz.thermalHotSpotC}°C</strong></div>
+                <div class="analysis-kpi"><span>52-LV Frame / CT Ratio</span><strong style="color:#67e8f9;">${sz.brkLvAmp}A (${sz.brkKa}kA) · CT ${sz.ctLvPri}:5</strong></div>
               </div>
+              <div style="margin-top:8px; padding:7px 9px; border-radius:6px; background:${sz.relay51Alert||sz.lvBusDropWarning?'rgba(127,29,29,0.5)':'rgba(6,78,59,0.35)'}; border:1px solid ${sz.relay51Alert?'#f87171':'rgba(16,185,129,0.4)'}; font-size:10.5px;">
+                <strong style="color:${sz.relay51Alert?'#fca5a5':'#a7f3d0'};">${sz.overloadBadge}</strong><br>
+                <span style="color:#cbd5e1; font-size:9.8px;">Busbar: ${sz.busbarSpec} · 3D TX Scale: ${sz.baseScaleRatio}×</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="analysis-panel" style="margin-top:10px;">
+            <div style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px;">
+              <h4 style="margin:0;">🎛️ Dynamic MVA &amp; Load Scaling Studio</h4>
+              <div style="display:flex; gap:5px; flex-wrap:wrap;">
+                <button class="tcc-topo-pill ${(ms.mode||'autosize')==='stress'?'active':''}" onclick="updateMvaScalingControl('mode','stress')">Mode A: Fixed Equipment / Stress Test</button>
+                <button class="tcc-topo-pill ${(ms.mode||'autosize')==='autosize'?'active':''}" onclick="updateMvaScalingControl('mode','autosize')">Mode B: Auto-Size Breakers, CTs, TCC &amp; 3D</button>
+                <button class="tcc-topo-pill" onclick="updateMvaScalingControl('reset',true)">Reset Defaults</button>
+              </div>
+            </div>
+            <div style="display:grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap:8px;">
+              <div class="analysis-slider-row"><label>TR-01 Rating <span>${curTr01} MVA</span></label><input type="range" min="10" max="300" step="5" value="${curTr01}" oninput="updateMvaScalingControl('txMvaOverride', this.value)"></div>
+              <div class="analysis-slider-row"><label>TR-02 Tie Rating <span>${curTr02} MVA</span></label><input type="range" min="5" max="100" step="2.5" value="${curTr02}" oninput="updateMvaScalingControl('subBTxMva', this.value)"></div>
+              <div class="analysis-slider-row"><label>RES Pole TX <span>${ms.resKva??50} kVA</span></label><input type="range" min="25" max="5000" step="25" value="${ms.resKva??50}" oninput="updateMvaScalingControl('resKva', this.value)"></div>
+              <div class="analysis-slider-row"><label>URD Subdiv <span>${ms.urdKva??900} kVA</span></label><input type="range" min="150" max="15000" step="150" value="${ms.urdKva??900}" oninput="updateMvaScalingControl('urdKva', this.value)"></div>
+              <div class="analysis-slider-row"><label>CBD / Hospital <span>${ms.cbdKva??750} kVA</span></label><input type="range" min="250" max="25000" step="250" value="${ms.cbdKva??750}" oninput="updateMvaScalingControl('cbdKva', this.value)"></div>
+              <div class="analysis-slider-row"><label>East University <span>${ms.uniKva??500} kVA</span></label><input type="range" min="100" max="15000" step="100" value="${ms.uniKva??500}" oninput="updateMvaScalingControl('uniKva', this.value)"></div>
+              <div class="analysis-slider-row"><label>Municipal / Log <span>${ms.munKva??1000} kVA</span></label><input type="range" min="250" max="20000" step="250" value="${ms.munKva??1000}" oninput="updateMvaScalingControl('munKva', this.value)"></div>
+              <div class="analysis-slider-row"><label>Industrial HV <span>${ms.indMva??25} MVA</span></label><input type="range" min="5" max="80" step="2.5" value="${ms.indMva??25}" oninput="updateMvaScalingControl('indMva', this.value)"></div>
             </div>
           </div>
         `;
       } else if (AppState.activeAnalysisTab === 'sc') {
         const sc = computeShortCircuitMetrics();
         const badgeCls = sc.dutyPass ? 'duty-pass' : 'duty-fail';
+        const sched = computeRelaySettingsSchedule(AppState.voltageClass, AppState.busTopology);
+        const groups = {};
+        Object.values(PINPOINT_FAULT_NODES).forEach(n => {
+          const g = n.group || 'Other';
+          if (!groups[g]) groups[g] = [];
+          groups[g].push(n);
+        });
+        const selOptions = Object.entries(groups).map(([gName, arr]) => `
+          <optgroup label="${gName}">
+            ${arr.map(n => `<option value="${n.id}" ${sc.loc === n.id ? 'selected' : ''}>${n.name}</option>`).join('')}
+          </optgroup>
+        `).join('');
+        const refSideSc = sc.vBaseKv > (sc.vs.lvKv * 1.4) ? 'hv' : 'lv';
+        const evSc = evaluateTccAtCurrent(Math.max(40, sc.iSymKa * 1000), sched, AppState.busTopology, refSideSc, false);
         body.innerHTML = `
           <div class="analysis-grid">
             <div class="analysis-panel">
-              <h4>Fault Location, Type & Grounding</h4>
+              <h4>23-Node System-Wide Fault Location, Type &amp; Grounding</h4>
               <div class="analysis-slider-row">
-                <label>Fault Bus Location</label>
-                <div class="preset-grid" style="grid-template-columns: repeat(3, 1fr);">
-                  <button class="btn-preset ${sc.loc==='hv_bus'?'active':''}" onclick="updateScLabControl('loc','hv_bus')">${sc.vs.hvKv} kV HV Bus</button>
-                  <button class="btn-preset ${sc.loc==='lv_bus'?'active':''}" onclick="updateScLabControl('loc','lv_bus')">${sc.vs.lvKv} kV LV Bus</button>
-                  <button class="btn-preset ${sc.loc==='fdr1_end'?'active':''}" onclick="updateScLabControl('loc','fdr1_end')">FDR-01 End</button>
+                <label>Target Fault Node (All 23 Grid Nodes)</label>
+                <select id="sc-fault-loc" onchange="updateScLabControl('loc', this.value)" style="width:100%; padding:5px 7px; background:#0f172a; color:#f1f5f9; border:1px solid rgba(56,189,248,0.4); border-radius:5px; font-size:11px;">
+                  ${selOptions}
+                </select>
+                <div class="preset-grid" style="grid-template-columns: repeat(6, 1fr); margin-top:5px;">
+                  <button class="btn-preset ${sc.loc==='node2_hv_bus'?'active':''}" onclick="updateScLabControl('loc','node2_hv_bus')">HV Bus</button>
+                  <button class="btn-preset ${sc.loc==='node5_lv_bus'?'active':''}" onclick="updateScLabControl('loc','node5_lv_bus')">LV Bus</button>
+                  <button class="btn-preset ${sc.loc==='node8_ind_sub'?'active':''}" onclick="updateScLabControl('loc','node8_ind_sub')">Ind Sub</button>
+                  <button class="btn-preset ${sc.loc==='node11_urd_pad'?'active':''}" onclick="updateScLabControl('loc','node11_urd_pad')">URD Pad</button>
+                  <button class="btn-preset ${sc.loc==='node15_uni_bus'?'active':''}" onclick="updateScLabControl('loc','node15_uni_bus')">East Uni</button>
+                  <button class="btn-preset ${sc.loc==='node19_subb_lv'?'active':''}" onclick="updateScLabControl('loc','node19_subb_lv')">SubB LV</button>
                 </div>
               </div>
               <div class="analysis-slider-row">
@@ -3951,41 +5650,50 @@ def get_js_app_core():
                   <button class="btn-preset ${!sc.ngrOn?'active':''}" onclick="updateScLabControl('ngr','ungrnd')">Isolated / Ungrounded Neutral</button>
                 </div>
               </div>
-              <svg viewBox="0 0 360 95" width="100%" style="background:#020617; border-radius:6px; border:1px solid rgba(56,189,248,0.2); margin-top:6px;">
-                <rect x="14" y="14" width="100" height="66" rx="4" fill="#0f172a" stroke="#38bdf8"/>
-                <text x="64" y="30" fill="#38bdf8" font-size="8.5" text-anchor="middle" font-weight="bold" font-family="monospace">Z₁ Positive</text>
-                <text x="64" y="48" fill="#f1f5f9" font-size="9" text-anchor="middle" font-family="monospace">${sc.z1.toFixed(4)} pu</text>
-                <text x="64" y="64" fill="#94a3b8" font-size="8" text-anchor="middle" font-family="monospace">I₁=${sc.iSeq1.toFixed(2)} pu</text>
-                <rect x="130" y="14" width="100" height="66" rx="4" fill="#0f172a" stroke="#f59e0b"/>
-                <text x="180" y="30" fill="#f59e0b" font-size="8.5" text-anchor="middle" font-weight="bold" font-family="monospace">Z₂ Negative</text>
-                <text x="180" y="48" fill="#f1f5f9" font-size="9" text-anchor="middle" font-family="monospace">${sc.z2.toFixed(4)} pu</text>
-                <text x="180" y="64" fill="#94a3b8" font-size="8" text-anchor="middle" font-family="monospace">I₂=${sc.iSeq2.toFixed(2)} pu</text>
-                <rect x="246" y="14" width="100" height="66" rx="4" fill="#0f172a" stroke="#10b981"/>
-                <text x="296" y="30" fill="#10b981" font-size="8.5" text-anchor="middle" font-weight="bold" font-family="monospace">Z₀ Zero-Seq</text>
-                <text x="296" y="48" fill="#f1f5f9" font-size="9" text-anchor="middle" font-family="monospace">${sc.z0 > 999 ? 'OPEN (∞)' : sc.z0.toFixed(4)+' pu'}</text>
-                <text x="296" y="64" fill="#94a3b8" font-size="8" text-anchor="middle" font-family="monospace">I₀=${sc.iSeq0.toFixed(2)} pu</text>
+              <svg viewBox="0 0 360 90" width="100%" style="background:#020617; border-radius:6px; border:1px solid rgba(56,189,248,0.2); margin-top:6px;">
+                <rect x="14" y="12" width="100" height="66" rx="4" fill="#0f172a" stroke="#38bdf8"/>
+                <text x="64" y="28" fill="#38bdf8" font-size="8.5" text-anchor="middle" font-weight="bold" font-family="monospace">Z₁ Positive</text>
+                <text x="64" y="45" fill="#f1f5f9" font-size="9" text-anchor="middle" font-family="monospace">${sc.z1.toFixed(4)} pu</text>
+                <text x="64" y="61" fill="#94a3b8" font-size="8" text-anchor="middle" font-family="monospace">I₁=${sc.iSeq1.toFixed(2)} pu</text>
+                <rect x="130" y="12" width="100" height="66" rx="4" fill="#0f172a" stroke="#f59e0b"/>
+                <text x="180" y="28" fill="#f59e0b" font-size="8.5" text-anchor="middle" font-weight="bold" font-family="monospace">Z₂ Negative</text>
+                <text x="180" y="45" fill="#f1f5f9" font-size="9" text-anchor="middle" font-family="monospace">${sc.z2.toFixed(4)} pu</text>
+                <text x="180" y="61" fill="#94a3b8" font-size="8" text-anchor="middle" font-family="monospace">I₂=${sc.iSeq2.toFixed(2)} pu</text>
+                <rect x="246" y="12" width="100" height="66" rx="4" fill="#0f172a" stroke="#10b981"/>
+                <text x="296" y="28" fill="#10b981" font-size="8.5" text-anchor="middle" font-weight="bold" font-family="monospace">Z₀ Zero-Seq</text>
+                <text x="296" y="45" fill="#f1f5f9" font-size="9" text-anchor="middle" font-family="monospace">${sc.z0 > 999 ? 'OPEN (∞)' : sc.z0.toFixed(4)+' pu'}</text>
+                <text x="296" y="61" fill="#94a3b8" font-size="8" text-anchor="middle" font-family="monospace">I₀=${sc.iSeq0.toFixed(2)} pu</text>
               </svg>
             </div>
             <div class="analysis-panel">
-              <h4>Fault Current & ANSI Breaker Duty Check (${sc.locLabel})</h4>
+              <h4>Fault Current, Duty &amp; Live Mini-TCC (${sc.locLabel})</h4>
               <div class="analysis-kpi-grid">
                 <div class="analysis-kpi"><span>Symmetrical Fault I_f,sym</span><strong style="color:#f87171;">${sc.iSymKa.toFixed(2)} kA (${sc.iFaultPu.toFixed(2)} pu)</strong></div>
-                <div class="analysis-kpi"><span>Asymmetric Crest I_peak</span><strong>${sc.iPeakKa.toFixed(2)} kA</strong></div>
-                <div class="analysis-kpi"><span>Short-Circuit MVA (S_sc)</span><strong>${sc.sScMva.toFixed(1)} MVA</strong></div>
-                <div class="analysis-kpi"><span>Base Current I_base</span><strong>${sc.iBaseKa.toFixed(3)} kA @ ${sc.vBaseKv} kV</strong></div>
+                <div class="analysis-kpi"><span>Asymmetric Crest I_peak</span><strong>${sc.iPeakKa.toFixed(2)} kA (X/R ${sc.xrRatio.toFixed(1)})</strong></div>
+                <div class="analysis-kpi"><span>Short-Circuit MVA (S_sc)</span><strong>${sc.sScMva.toFixed(1)} MVA @ ${sc.vBaseKv} kV</strong></div>
+                <div class="analysis-kpi"><span>Active Protection Path</span><strong style="color:#67e8f9;">${(sc.upstreamDevices||[]).slice(0,2).join(' → ')}</strong></div>
               </div>
-              <div style="margin-top:12px; padding:10px; background:rgba(15,23,42,0.85); border-radius:6px; border:1px solid rgba(148,163,184,0.2);">
+              <div style="margin-top:8px; padding:7px 9px; background:rgba(15,23,42,0.85); border-radius:6px; border:1px solid rgba(148,163,184,0.2);">
                 <div style="display:flex; justify-content:space-between; align-items:center;">
-                  <span style="font-size:11px; color:#cbd5e1;">Breaker Interrupting Capacity: <strong>${sc.cbRatingKa} kA</strong></span>
+                  <span style="font-size:10.5px; color:#cbd5e1;">Breaker Duty: <strong>${sc.cbRatingKa} kA</strong></span>
                   <span class="duty-badge ${badgeCls}">${sc.dutyPass ? 'PASS — WITHIN RATING' : 'FAIL — EXCEEDS RATING'}</span>
                 </div>
-                <p style="font-size:10.5px; color:#94a3b8; margin-top:6px; line-height:1.45;">
-                  ${sc.ngrOn ? `With ${sc.vs.ngrOhms} Ω NGR inserted, 3Z_n dramatically increases Z₀ to limit ground-fault arc damage (IEEE C62.92).` : 'With neutral ungrounded, I₀ = 0 during SLG faults (low fault current, but temporary overvoltage on unfaulted phases).'}
-                </p>
+                <button class="btn" style="width:100%; justify-content:center; margin-top:7px; padding:5px 10px; font-size:10.8px; background:rgba(250,204,21,0.18); border-color:#facc15; color:#fef08a;" onclick="plotActiveFaultOnTcc('${sc.loc}')">
+                  📈 Plot This Fault on TCC Coordination Graph
+                </button>
+              </div>
+              <div style="margin-top:8px; background:#020617; border:1px solid rgba(56,189,248,0.25); border-radius:6px; padding:5px;">
+                <div style="font-size:9.8px; color:#94a3b8; margin-bottom:3px; display:flex; justify-content:space-between;">
+                  <span>⚡ Mini-TCC Sequence (${refSideSc.toUpperCase()} Ref):</span>
+                  <span style="color:#fde68a; font-family:monospace;">F1:${evSc.tFdr!=null?evSc.tFdr.toFixed(3)+'s':'—'} | LV:${evSc.tLv!=null?evSc.tLv.toFixed(3)+'s':'—'} | HV:${evSc.tTopo!=null?evSc.tTopo.toFixed(3)+'s':'—'}</span>
+                </div>
+                <canvas id="sc-mini-tcc-canvas" width="350" height="118" style="width:100%; height:auto; display:block;"></canvas>
               </div>
             </div>
           </div>
         `;
+        const miniCanvas = document.getElementById('sc-mini-tcc-canvas');
+        if (miniCanvas) drawScMiniTccPreview(miniCanvas, sc, sched);
       } else if (AppState.activeAnalysisTab === 'tcc') {
         renderTccCoordinationTab(body);
       } else {
@@ -4017,21 +5725,37 @@ def get_js_app_core():
       const vs = getVoltageSpec(vClass || AppState.voltageClass || '69_13');
       const top = scheme || AppState.busTopology || 'single';
       const pf = computePowerFlowMetrics();
+      const sz = pf.sizing || {};
+      const isAuto = (sz.mode === 'autosize');
+      const distKv = vs.distKv || 13.8;
+      const indKv = vs.indSubKv || 69.0;
+      const effTxMva = isAuto ? (sz.sizingMva || vs.mva) : vs.mva;
+      const distMva = Math.min(effTxMva, isAuto ? Math.max(41.7, effTxMva) : Math.min(41.7, vs.mva));
+      const indRatedMva = (AppState.mvaScaling && AppState.mvaScaling.indMva != null) ? AppState.mvaScaling.indMva : (vs.indCustMva || 25.0);
 
-      const iHvFl = Math.round((vs.mva * 1000) / (Math.sqrt(3) * vs.hvKv)); // TR-01 HV FLA (A)
-      const iLvFl = Math.round((vs.mva * 1000) / (Math.sqrt(3) * vs.lvKv)); // TR-01 LV FLA (A)
-      const iFdrFl = Math.round(iLvFl * 0.42);                              // ~42% share per feeder
+      const iHvFl = Math.round((effTxMva * 1000) / (Math.sqrt(3) * vs.hvKv));
+      const iLvFl = Math.round((distMva * 1000) / (Math.sqrt(3) * distKv));
+      const iFdrFl = Math.round(iLvFl * 0.28);
+      const iIndFl = Math.round((indRatedMva * 1000) / (Math.sqrt(3) * indKv));
 
-      const hvCtPri = Math.max(400, Math.ceil((iHvFl * 1.35) / 200) * 200);
-      const lvCtPri = Math.max(1200, Math.ceil((iLvFl * 1.25) / 500) * 500);
-      const fdrCtPri = Math.max(400, Math.ceil((iFdrFl * 1.35) / 200) * 200);
-      const ngrIp = Math.max(20, Math.round((vs.lvKv * 1000 / Math.sqrt(3) / Math.max(1, vs.ngrOhms)) * 0.15));
+      const hvCtPri = isAuto && sz.ctHvPri ? sz.ctHvPri : Math.max(400, Math.ceil((iHvFl * 1.35) / 200) * 200);
+      const lvCtPri = isAuto && sz.ctLvPri ? sz.ctLvPri : Math.max(1200, Math.ceil((iLvFl * 1.25) / 500) * 500);
+      const fdrCtPri = isAuto && sz.fdrCtPri ? sz.fdrCtPri : Math.max(400, Math.ceil((iFdrFl * 1.35) / 200) * 200);
+      const brkHvAmp = sz.brkHvAmp || 1200;
+      const brkLvAmp = sz.brkLvAmp || 2000;
+      const brkKa = sz.brkKa || vs.lvCbKa || 31.5;
+      const busbarSpec = sz.busbarSpec || '100 mm IPS Al Pipe';
+      const ngrIp = Math.max(20, Math.round((distKv * 1000 / Math.sqrt(3) / 10.0) * 0.15));
 
-      const fdrPickupLv = Math.round(fdrCtPri * 0.65);     // 65% of feeder CT (~520-650 A @ 13.8 kV)
-      const fdrInstLv = Math.round(fdrPickupLv * 8.0);     // Instantaneous 50P high-set
-      const lvMainPickupLv = Math.round(iLvFl * 1.25);     // 125% TR-01 LV FLA (~2180 A @ 13.8 kV)
-      const hvBackupPickupHv = Math.round(iHvFl * 1.50);   // 150% TR-01 HV FLA
-      const hvBackupRefLv = Math.round(hvBackupPickupHv * (vs.hvKv / vs.lvKv));
+      const fdrPickupLv = Math.round(fdrCtPri * 0.65);
+      const fdrInstLv = Math.round(fdrPickupLv * 8.0);
+      const lvMainPickupLv = Math.round(iLvFl * 1.25);     // 125% TR-01 LV FLA
+      const indPickupHv = Math.round(iIndFl * 1.45);
+      const indInstHv = Math.round(indPickupHv * 6.5);
+      const indPickupLv = Math.round(indPickupHv * (indKv / distKv));
+      const indInstLv = Math.round(indInstHv * (indKv / distKv));
+      const hvBackupPickupHv = Math.round(iHvFl * 1.50);   // 150% Primary HV FLA
+      const hvBackupRefLv = Math.round(hvBackupPickupHv * (vs.hvKv / distKv));
 
       const lineReachZ1Ohm = +(0.80 * (vs.hvKv * vs.hvKv / 180)).toFixed(2);
       const topoNotes = {
@@ -4060,11 +5784,11 @@ def get_js_app_core():
       const cards = [
         {
           id: 'line_21_87b',
-          badge: `${vs.hvKv} kV INCOMING`,
+          badge: `${vs.hvKv} kV INCOMING (${brkHvAmp}A)`,
           title: '1. Incoming Line Distance & Directional OC',
           ansi: 'ANSI 21 / 67 / 50 / 51',
           rows: [
-            ['CT / VT Ratios', `${hvCtPri}:5 A (C800) | ${(vs.hvKv*1000/115).toFixed(0)}:1 VT`],
+            ['CT / VT / Breaker', `${hvCtPri}:5 A (C800) | ${brkHvAmp} A CB | ${(vs.hvKv*1000/115).toFixed(0)}:1 VT`],
             ['21 Zone 1 / Zone 2', `${lineReachZ1Ohm} Ω (80%, 0 cyc) | ${(lineReachZ1Ohm*1.5).toFixed(2)} Ω (120%, 0.35 s)`],
             ['67/51 Directional OC', `Pickup = ${Math.round(iHvFl*1.65)} A | IEEE VI, TDS = 3.2`],
             ['50P Inst High-Set', `${(vs.hvCbKa * 0.45).toFixed(1)} kA (trips 52 in 2–3 cyc)`]
@@ -4078,74 +5802,272 @@ def get_js_app_core():
           rows: [
             ['Bus Diff Slope (87B)', `Slope 1 = 25% | Slope 2 = 60% | I_op > 0.20 pu`],
             ['50BF Breaker Failure', `Delay = 0.15 s (9 cyc) -> Retrip + Bus 86B Lockout`],
-            ['HV Bus Fault Duty', `${vs.hvCbKa} kA CB interrupting rating`],
+            ['Busbar & Fault Duty', `${busbarSpec} | ${brkKa} kA CB Duty`],
             ['Scheme Behavior', topoNotes[top].desc]
           ]
         },
         {
           id: 'tx_87t',
-          badge: `${vs.mva} MVA ${vs.vectorGroup}`,
+          badge: `${Math.round(effTxMva)} MVA ${vs.vectorGroup}`,
           title: '3. TR-01 Transformer Differential & Mechanical',
           ansi: 'ANSI 87T / 51-HV / 63 / 49',
           rows: [
             ['87T Phase/Slope', `Dyn11 Δ-Y Comp | I_min = 0.25 pu, Slopes 25% / 50%`],
             ['2nd / 5th Harmonic Block', `Inrush Block I₂/I₁ ≥ 15% | Overexc. I₅/I₁ ≥ 35%`],
-            ['51-HV Backup OC', `${hvBackupPickupHv} A HV (${hvBackupRefLv} A @ ${vs.lvKv}kV) | IEEE VI, TDS = 2.2`],
-            ['Mechanical (63 / 49)', `Buchholz Alarm/Trip + 105°C Winding Hot-Spot Trip`]
+            ['51-HV Backup OC', `${hvBackupPickupHv} A HV (${hvBackupRefLv} A @ ${distKv}kV) | IEEE VI, TDS = 2.2`],
+            ['Mechanical (63 / 49)', `Buchholz Alarm/Trip + Hot-Spot ${sz.thermalHotSpotC || 85}°C (Trip > 110°C)`]
           ]
         },
         {
           id: 'tx_87t',
-          badge: `${vs.lvKv} kV MAIN + NGR`,
+          badge: `${distKv} kV MAIN (${brkLvAmp}A)`,
           title: '4. Secondary Main VCB & Neutral Grounding',
           ansi: 'ANSI 50/51-LV / 51G / 64REF',
           rows: [
-            ['Secondary CT Ratio', `${lvCtPri}:5 A (C400) | TR-01 FLA = ${iLvFl} A`],
-            ['51-LV Time Overcurrent', `Pickup = ${lvMainPickupLv} A | IEEE VI, TDS = 1.25`],
+            ['VCB Frame & CT Ratio', `${brkLvAmp} A (${brkKa} kA) | CT ${lvCtPri}:5 A | FLA = ${iLvFl} A`],
+            ['51-LV Time Overcurrent', `Pickup = ${lvMainPickupLv} A (125% FLA) | IEEE VI, TDS = 1.25`],
             ['50-LV Instantaneous', `${Math.round(lvMainPickupLv * 7.5)} A (Coordinated below HV 51-HV)`],
             ['51G NGR + 64REF', `NGR = ${vs.ngrOhms} Ω | 51G Pickup = ${ngrIp} A, TDS 0.8 (IEC SI)`]
           ]
         },
         {
           id: 'fdr_50_51',
-          badge: `${vs.lvKv} kV FDR-01 / 02`,
-          title: '5. Distribution Feeders & Auto-Reclosing',
+          badge: `${distKv} kV FDR-01..04`,
+          title: '5. Public Distribution Feeders & Auto-Reclosing',
           ansi: 'ANSI 50/51 / 51N / 79',
           rows: [
-            ['Feeder CT Ratio', `${fdrCtPri}:5 A | Nominal Load ≈ ${iFdrFl} A`],
-            ['51-F1 / 51-F2 Curve', `Pickup = ${fdrPickupLv} A | IEEE VI, TDS = 0.70 (Fast Clear)`],
+            ['Feeder CT Ratio', `${fdrCtPri}:5 A | Nominal Load ≈ ${iFdrFl} A (${distKv} kV)`],
+            ['51-F1..F4 Curve', `Pickup = ${fdrPickupLv} A | IEEE VI, TDS = 0.70 (Fast Clear)`],
             ['50-F1 / 51N Ground', `50P Inst = ${fdrInstLv} A | 51N Residual = 160 A, TDS 0.45`],
             ['79 Auto-Recloser', `1 Fast + 2 Delayed Shots (0.5 s, 5 s, 15 s) -> Lockout`]
+          ]
+        },
+        {
+          id: 'ind_21_51',
+          badge: `${indKv} kV INDUSTRIAL`,
+          title: '6. Dedicated Industrial Sub-Tx Feeder (52-IND)',
+          ansi: 'ANSI 21-IND / 50/51-IND',
+          rows: [
+            ['Sub-Tx Tap Rating', `${indKv} kV Direct Feed → 52-CUST (${indRatedMva} MVA, FLA = ${iIndFl} A)`],
+            ['51-IND Phase OC', `Pickup = ${indPickupHv} A @ ${indKv}kV | IEEE VI, TDS = 1.55`],
+            ['50-IND / 21-IND Dist.', `50P Inst = ${indInstHv} A | Z1 Reach = 80% North ROW Line`],
+            ['Upstream Backup', `51-HV Stage-1 Backup coordinated >= 0.30 s CTI above 52-IND`]
           ]
         }
       ];
 
       return {
-        vs, top, pf, iHvFl, iLvFl, iFdrFl,
-        hvCtPri, lvCtPri, fdrCtPri,
-        fdrPickupLv, fdrInstLv,
-        lvMainPickupLv,
+        vs, top, pf, sz, distKv, indKv, iHvFl, iLvFl, iFdrFl, iIndFl,
+        hvCtPri, lvCtPri, fdrCtPri, brkHvAmp, brkLvAmp, brkKa, busbarSpec,
+        fdrPickupLv, fdrInstLv, lvMainPickupLv,
+        indPickupHv, indInstHv, indPickupLv, indInstLv,
         hvBackupPickupHv, hvBackupRefLv,
         cards
       };
     }
 
+    function toggleProtectionZone3D(relayKey) {
+      const targetKey = (relayKey && relayKey !== 'all') ? relayKey : '21';
+      AppState.activeProtectionZone3D = (AppState.activeProtectionZone3D === targetKey) ? null : targetKey;
+      const L = getBusLayoutConfig(AppState.busTopology, AppState.voltageClass);
+      if (switchyardObjects.protectionOverlay && scene) {
+        scene.remove(switchyardObjects.protectionOverlay);
+      }
+      if (scene) {
+        switchyardObjects.protectionOverlay = AppState.activeProtectionZone3D
+          ? buildProtectionZoneOverlay(scene, L, AppState.activeProtectionZone3D)
+          : null;
+      }
+      renderAnalysisModalBody();
+    }
+
+    function jumpToProtectionZone3D(relayKey) {
+      const targetKey = (relayKey && relayKey !== 'all') ? relayKey : '21';
+      AppState.activeProtectionZone3D = targetKey;
+      const L = getBusLayoutConfig(AppState.busTopology, AppState.voltageClass);
+      if (switchyardObjects.protectionOverlay && scene) {
+        scene.remove(switchyardObjects.protectionOverlay);
+      }
+      if (scene) {
+        switchyardObjects.protectionOverlay = buildProtectionZoneOverlay(scene, L, targetKey);
+      }
+      if (typeof closeAnalysisModal === 'function') closeAnalysisModal();
+      const presetMap = {
+        '21': 'ctvt',
+        '87B': 'busbar',
+        '87T': 'transformer',
+        '50_51_lv': 'secondary',
+        '51G': 'transformer',
+        '50_51_f1': 'feeders',
+        'recloser': 'recloser'
+      };
+      setCameraPreset(presetMap[targetKey] || 'overview', true);
+    }
+
+    function renderRelayElementarySvg(relayKey, sched) {
+      const key = (relayKey && relayKey !== 'all') ? relayKey : '21';
+      const vs = sched.vs;
+      const ngrIp = Math.max(20, Math.round((vs.lvKv * 1000 / Math.sqrt(3) / Math.max(1, vs.ngrOhms)) * 0.15));
+      const specMap = {
+        '21': {
+          title: 'ANSI 21 / 67 / 50 — Incoming Line Distance & Directional Relay Schematic',
+          ctText: `CT/VT-69 (${sched.hvCtPri}:5 A, ${(vs.hvKv * 1000 / 115).toFixed(0)}:1 VT)`,
+          ctSub: `3-Phase Ia/Ib/Ic + Va/Vb/Vc Polarization`,
+          relayName: 'SEL-411L LINE RELAY (BAY 1)',
+          logicText: `Z1 = ${(0.80 * (vs.hvKv * vs.hvKv / 180)).toFixed(2)} Ω (0 cyc) | 67/51 = ${Math.round(sched.iHvFl * 1.65)} A`,
+          tripCoil: '52-69 SF6 Breaker TC1/TC2',
+          backup: '50BF (0.15 s) -> Retrip + 86B Bus Lockout'
+        },
+        '87B': {
+          title: `ANSI 87B — High-Speed Busbar Differential & Breaker Failure (${LAND_TOPO_FACTORS[sched.top].label})`,
+          ctText: `Multi-Terminal Bus CTs (${sched.hvCtPri}:5 A C800)`,
+          ctSub: `Kirchhoff Nodal Sum |Σ I_in - Σ I_out|`,
+          relayName: 'SEL-487B BUS DIFF (BAY 2)',
+          logicText: `Slope 1 = 25% | Slope 2 = 60% | Iop > 0.20 pu (1.5 cyc)`,
+          tripCoil: 'All HV Bus CBs + 86B Lockout Relay',
+          backup: '50BF Check Zone -> Remote Line Transfer Trip'
+        },
+        '87T': {
+          title: `ANSI 87T / 63 — Power Transformer TR-01 (${vs.mva} MVA ${vs.vectorGroup}) Differential`,
+          ctText: `HV (${sched.hvCtPri}:5 A) + LV (${sched.lvCtPri}:5 A) CTs`,
+          ctSub: `Dyn11 Software Vector & Zero-Seq Comp`,
+          relayName: 'SEL-487E XFMR DIFF (BAY 3)',
+          logicText: `Slopes 25%/50% | 2nd Harm Block >= 15% + 63/49 Trip`,
+          tripCoil: '52-69 HV + 52-LV Main (Dual 86T Lockout)',
+          backup: '51-HV Backup OC (' + sched.hvBackupPickupHv + ' A) + Tap Lockout'
+        },
+        '50_51_lv': {
+          title: `ANSI 50/51-LV — ${vs.lvKv} kV Secondary Main VCB Overcurrent Protection`,
+          ctText: `CT/VT-LV Secondary Bus (${sched.lvCtPri}:5 A C400)`,
+          ctSub: `Phase Overcurrent Sensing + Bus VT Undervoltage`,
+          relayName: 'SEL-751 MAIN RELAY (BAY 4)',
+          logicText: `51-LV = ${sched.lvMainPickupLv} A (IEEE VI, TDS 1.25) | CTI >= 0.30 s`,
+          tripCoil: '52-LV Main Vacuum Breaker TC',
+          backup: '50BF (0.15 s) -> Trips Upstream 52-69 HV CB'
+        },
+        '51G': {
+          title: `ANSI 51G / 64REF — Transformer X0 Neutral NGR (${vs.ngrOhms} Ω) Ground Protection`,
+          ctText: `NGR Window CT (400:5 A Zero-Sequence)`,
+          ctSub: `TR-01 X0 Bushing -> NGR-01 -> Station Grid`,
+          relayName: 'SEL-751G NEUTRAL RELAY (BAY 4)',
+          logicText: `51G Pickup = ${ngrIp} A (IEC SI, TDS 0.8) + 64REF Check`,
+          tripCoil: '52-LV Main + 52-69 HV Isolation',
+          backup: 'Prevents X0 Core Burning (Limited < 400 A Fault)'
+        },
+        '50_51_f1': {
+          title: `ANSI 50/51/79-F1 — Outgoing ${vs.lvKv} kV Feeder 01 Overcurrent & Auto-Reclose`,
+          ctText: `Fdr-01 Bushing CTs (${sched.fdrCtPri}:5 A)`,
+          ctSub: `3I Phase + 3I0 Residual Ground Sensing`,
+          relayName: 'SEL-751 FEEDER RELAY (BAY 5)',
+          logicText: `51-F1 = ${sched.fdrPickupLv} A (TDS 0.70) | 79 Shots: 0.5/5/15 s`,
+          tripCoil: '52-F1 Vacuum Feeder Breaker TC',
+          backup: '50BF -> Trips 52-LV Main Bus Incomer'
+        },
+        'recloser': {
+          title: `ANSI 79-ACR1 / 34-SECT / 100K — Distribution Fuse-Saving & FLISR Loop Control`,
+          ctText: `79-ACR1 Internal CTs/VTs + 34-SECT Sensor`,
+          ctSub: `Pole 1 Mainline Recloser + Pole 2 Sectionalizer`,
+          relayName: 'SEL-651R POLE CONTROL (LOCAL)',
+          logicText: `2 Fast (A) + 2 Slow (B/C) | 34-SECT Arm 160 A, 2 Counts`,
+          tripCoil: '79-ACR1 Vacuum Actuator + 79-TIE FLISR Transfer',
+          backup: 'Saves 100K Lateral Fuse on Transient Faults; Isolates Permanent'
+        }
+      };
+      const cfg = specMap[key] || specMap['21'];
+      return `
+        <div class="relay-schematic-box">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:6px;">
+            <strong style="font-size:11.5px; color:#e0f2fe;">🔌 ${cfg.title}</strong>
+            <span style="font-size:10px; color:#94a3b8; font-family:monospace;">125 V DC Station Battery Supervised Trip Loop</span>
+          </div>
+          <svg viewBox="0 0 760 170" width="100%" style="display:block; background:#020617; border:1px solid rgba(56,189,248,0.22); border-radius:6px;">
+            <defs>
+              <marker id="arrCy" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#38bdf8"/></marker>
+              <marker id="arrRd" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#f87171"/></marker>
+              <marker id="arrVi" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#c084fc"/></marker>
+            </defs>
+            <!-- Block 1: Instrument Transformers (CT/VT) -->
+            <rect x="14" y="20" width="208" height="86" rx="6" fill="rgba(8,47,73,0.72)" stroke="#38bdf8" stroke-width="1.5"/>
+            <text x="118" y="39" fill="#7dd3fc" font-size="10.5" font-weight="700" text-anchor="middle">1. YARD CT / VT SENSING</text>
+            <text x="118" y="58" fill="#f8fafc" font-size="10" font-weight="600" text-anchor="middle">${cfg.ctText}</text>
+            <text x="118" y="76" fill="#cbd5e1" font-size="9.2" text-anchor="middle">${cfg.ctSub}</text>
+            <text x="118" y="95" fill="#38bdf8" font-size="9" font-family="monospace" text-anchor="middle">AC 5A / 115V Analog Leads</text>
+
+            <!-- Arrow CT -> Relay -->
+            <line x1="222" y1="63" x2="266" y2="63" stroke="#38bdf8" stroke-width="2" marker-end="url(#arrCy)"/>
+            <text x="244" y="55" fill="#38bdf8" font-size="8.5" font-weight="700" text-anchor="middle">AC I/V</text>
+
+            <!-- Block 2: Control House Relay Rack -->
+            <rect x="270" y="20" width="222" height="86" rx="6" fill="rgba(69,26,3,0.68)" stroke="#f59e0b" stroke-width="1.6"/>
+            <text x="381" y="39" fill="#fcd34d" font-size="10.5" font-weight="700" text-anchor="middle">2. CONTROL HOUSE RELAY</text>
+            <text x="381" y="58" fill="#fef3c7" font-size="10.2" font-weight="700" text-anchor="middle">${cfg.relayName}</text>
+            <text x="381" y="76" fill="#fde68a" font-size="9" text-anchor="middle">${cfg.logicText}</text>
+            <text x="381" y="95" fill="#f59e0b" font-size="8.8" font-family="monospace" text-anchor="middle">Output Contact 52T -> Close on Fault</text>
+
+            <!-- Arrow Relay -> Trip Coil -->
+            <line x1="492" y1="63" x2="536" y2="63" stroke="#f87171" stroke-width="2.2" marker-end="url(#arrRd)"/>
+            <text x="514" y="55" fill="#fca5a5" font-size="8.5" font-weight="700" text-anchor="middle">125V DC</text>
+
+            <!-- Block 3: 125V DC Trip Coil & Breaker -->
+            <rect x="540" y="20" width="206" height="86" rx="6" fill="rgba(69,10,10,0.72)" stroke="#f87171" stroke-width="1.5"/>
+            <text x="643" y="39" fill="#fca5a5" font-size="10.5" font-weight="700" text-anchor="middle">3. BREAKER TRIP COIL (52T)</text>
+            <text x="643" y="58" fill="#ffffff" font-size="10" font-weight="600" text-anchor="middle">${cfg.tripCoil}</text>
+            <text x="643" y="76" fill="#fecaca" font-size="9" text-anchor="middle">125 V DC Station Battery + 86 Lockout</text>
+            <text x="643" y="95" fill="#f87171" font-size="8.8" font-family="monospace" text-anchor="middle">Target Break Time: 2–3 Cycles</text>
+
+            <!-- 125V DC Battery & 50BF Backup Bus along Bottom -->
+            <rect x="14" y="122" width="170" height="34" rx="5" fill="rgba(15,23,42,0.9)" stroke="#94a3b8" stroke-width="1.2"/>
+            <text x="99" y="137" fill="#e2e8f0" font-size="9.5" font-weight="700" text-anchor="middle">🔋 125 V DC STATION BATTERY</text>
+            <text x="99" y="150" fill="#94a3b8" font-size="8.5" text-anchor="middle">+ / - Trip Bus + Coil Monitor</text>
+
+            <path d="M 184 139 L 381 139 L 381 106" fill="none" stroke="#f87171" stroke-width="1.4" stroke-dasharray="4 3"/>
+
+            <rect x="414" y="122" width="332" height="34" rx="5" fill="rgba(59,7,100,0.55)" stroke="#c084fc" stroke-width="1.2"/>
+            <text x="580" y="137" fill="#e9d5ff" font-size="9.5" font-weight="700" text-anchor="middle">🛡️ BACKUP / 50BF BREAKER FAILURE PATH</text>
+            <text x="580" y="150" fill="#d8b4fe" font-size="8.8" text-anchor="middle">${cfg.backup}</text>
+            <line x1="643" y1="106" x2="643" y2="122" stroke="#c084fc" stroke-width="1.5" marker-end="url(#arrVi)"/>
+          </svg>
+        </div>
+      `;
+    }
+
     function evaluateTccAtCurrent(Iamp, sched, topo, refSide, splitContingency) {
-      const kScale = (refSide === 'hv') ? (sched.vs.lvKv / sched.vs.hvKv) : 1.0;
+      const kScale = (refSide === 'hv') ? ((sched.vs.distKv || 13.8) / sched.vs.hvKv) : 1.0;
       const toPlotA = (ampLv) => ampLv * kScale;
 
       const fdrIp = toPlotA(sched.fdrPickupLv);
       const fdrInst = toPlotA(sched.fdrInstLv);
       const lvIp = toPlotA(sched.lvMainPickupLv);
+      const indIp = toPlotA(sched.indPickupLv || sched.lvMainPickupLv * 0.75);
+      const indInst = toPlotA(sched.indInstLv || sched.fdrInstLv * 1.4);
       const hvIp = toPlotA(sched.hvBackupRefLv);
+      const recIp = fdrIp * 0.48;
+      const sectArmIp = toPlotA(160);
+
+      // 0. Distribution Fuse-Saving & Lateral 100K Fuse Curves (79-ACR1 Fast / 100K Fuse / 79-ACR1 Slow)
+      const mRec = Iamp / Math.max(1, recIp);
+      let tRecFast = null;
+      if (mRec >= 1.15) {
+        tRecFast = Math.max(0.028, Math.min(25, 0.065 / (Math.pow(mRec, 0.95) - 1) + 0.018));
+      }
+      const iFuseEq = mRec * 312;
+      let tFuseMin = null;
+      let tFuseClear = null;
+      if (iFuseEq >= 210) {
+        tFuseMin = Math.max(0.018, 220000 / Math.pow(iFuseEq - 120, 1.85));
+        tFuseClear = tFuseMin * 1.68;
+      }
+      const tRecSlow = ieeeTccTime(Iamp, recIp * 1.15, 0.50, 'VI');
 
       // 1. Feeder 50/51-F1 curve (instantaneous ceiling at fdrInst)
       let tFdr = ieeeTccTime(Iamp, fdrIp, 0.70, 'VI');
       if (Iamp >= fdrInst) tFdr = 0.035;
 
-      // 2. LV Main 50/51-LV curve
+      // 2. LV Main 50/51-LV curve + 2b. Dedicated Industrial 50/51-IND curve (21-IND)
       let tLv = ieeeTccTime(Iamp, lvIp, 1.25, 'VI');
       if (Iamp >= lvIp * 8.5) tLv = 0.055;
+      let tInd = ieeeTccTime(Iamp, indIp, 1.55, 'VI');
+      if (Iamp >= indInst) tInd = 0.05;
 
       // 3. Topology-dependent Primary/Bus Backup curve:
       // Ring & Double-Breaker split fault/load current across parallel paths (higher effective pickup per branch leg
@@ -4189,8 +6111,9 @@ def get_js_app_core():
       const cti23 = (tLv != null && tTopo != null) ? (tTopo - tLv) : null;
 
       return {
-        fdrIp, fdrInst, lvIp, hvIp, branchFactor, topoCurveLabel,
-        tFdr, tLv, tTopo, tDmg,
+        fdrIp, fdrInst, lvIp, indIp, indInst, hvIp, recIp, sectArmIp, branchFactor, topoCurveLabel,
+        tRecFast, tFuseMin, tFuseClear, tRecSlow,
+        tFdr, tLv, tInd, tTopo, tDmg,
         cti12, cti23
       };
     }
@@ -4198,12 +6121,16 @@ def get_js_app_core():
     function setTccControl(key, val) {
       if (!AppState.tccState) return;
       if (key === 'topo') AppState.tccState.topo = val;
+      else if (key === 'clearPin') AppState.tccState.pinnedFault = null;
       else if (key === 'refSide') {
         const oldSide = AppState.tccState.refSide;
         if (oldSide !== val) {
           const vs = getVoltageSpec(AppState.voltageClass);
-          const ratio = vs.hvKv / vs.lvKv;
+          const ratio = vs.hvKv / (vs.distKv || vs.lvKv || 13.8);
           AppState.tccState.cursorAmp = Math.round(val === 'hv' ? (AppState.tccState.cursorAmp / ratio) : (AppState.tccState.cursorAmp * ratio));
+          if (AppState.tccState.pinnedFault && AppState.tccState.pinnedFault.iAmpsPlot) {
+            AppState.tccState.pinnedFault.iAmpsPlot = Math.round(val === 'hv' ? (AppState.tccState.pinnedFault.iAmpsPlot / ratio) : (AppState.tccState.pinnedFault.iAmpsPlot * ratio));
+          }
           AppState.tccState.refSide = val;
         }
       } else if (key === 'splitContingency') {
@@ -4212,37 +6139,106 @@ def get_js_app_core():
         AppState.tccState.cursorAmp = Math.max(40, Math.min(90000, Number(val) || 4200));
       } else if (key === 'focusedRelay') {
         AppState.tccState.focusedRelay = val;
+        if (val !== 'all' && (!AppState.tccState.viewMode || AppState.tccState.viewMode === 'all')) {
+          AppState.tccState.viewMode = 'highlight';
+        }
+      } else if (key === 'viewMode') {
+        AppState.tccState.viewMode = val;
+        if ((val === 'highlight' || val === 'isolate') && (!AppState.tccState.focusedRelay || AppState.tccState.focusedRelay === 'all')) {
+          AppState.tccState.focusedRelay = '50_51_f1';
+        }
       }
       renderAnalysisModalBody();
     }
 
     function renderTccCoordinationTab(body) {
-      const ts = AppState.tccState || { topo: AppState.busTopology, refSide: 'lv', splitContingency: false, cursorAmp: 4200, focusedRelay: 'all' };
+      const ts = AppState.tccState || { topo: AppState.busTopology, refSide: 'lv', splitContingency: false, cursorAmp: 4200, focusedRelay: 'all', viewMode: 'highlight', pinnedFault: null };
+      if (!ts.viewMode) ts.viewMode = 'highlight';
       AppState.tccState = ts;
       const topo = ts.topo || AppState.busTopology || 'single';
       const sched = computeRelaySettingsSchedule(AppState.voltageClass, topo);
-      const ev = evaluateTccAtCurrent(ts.cursorAmp, sched, topo, ts.refSide, ts.splitContingency);
+      const pin = ts.pinnedFault || null;
+      const evalAmp = pin && pin.iAmpsPlot ? pin.iAmpsPlot : ts.cursorAmp;
+      const ev = evaluateTccAtCurrent(evalAmp, sched, topo, ts.refSide, ts.splitContingency);
 
-      const refKv = ts.refSide === 'hv' ? sched.vs.hvKv : sched.vs.lvKv;
+      const refKv = ts.refSide === 'hv' ? sched.vs.hvKv : (sched.vs.distKv || sched.vs.lvKv);
       const cti12Ok = (ev.cti12 === null || ev.cti12 >= 0.25);
       const cti23Ok = (ev.cti23 === null || ev.cti23 >= 0.25);
       const dmgOk = (ev.tDmg === null || ev.tTopo === null || ev.tTopo < ev.tDmg);
       const allPass = cti12Ok && cti23Ok && dmgOk;
 
       const verdictHtml = allPass
-        ? `<div class="tcc-verdict-banner">✅ <strong>SELECTIVE COORDINATION VERIFIED (CTI ≥ 0.25–0.35 s):</strong> <span style="color:#a7f3d0;">Feeder 51-F1 clears ahead of 51-LV; ${ev.topoCurveLabel} backs up below IEEE C57.109 TR-01 damage curve at ${ts.cursorAmp.toLocaleString()} A (${refKv} kV base).</span></div>`
+        ? `<div class="tcc-verdict-banner">✅ <strong>SELECTIVE COORDINATION VERIFIED (CTI ≥ 0.25–0.35 s):</strong> <span style="color:#a7f3d0;">Feeder 51-F1 clears ahead of 51-LV; ${ev.topoCurveLabel} backs up below IEEE C57.109 TR-01 damage curve at ${evalAmp.toLocaleString()} A (${refKv} kV base).</span></div>`
         : `<div class="tcc-verdict-banner miscoord">⚠️ <strong>MISCOORDINATION / OVERLAP DETECTED:</strong> <span style="color:#fecdd3;">Check Δt margins (51-LV/51-F1 Δt=${ev.cti12!==null?ev.cti12.toFixed(2)+'s':'N/A'} | HV/LV Δt=${ev.cti23!==null?ev.cti23.toFixed(2)+'s':'N/A'}). Switch to N-1 / adjust Fault Cursor to inspect IEEE 242 Buff Book margin.</span></div>`;
 
+      const seqCandidates = [
+        ['79-ACR1 Fast (A)', '#a855f7', ev.tRecFast],
+        ['100K Lateral Fuse Clear', '#fb923c', ev.tFuseClear],
+        ['79-ACR1 Slow (B/C)', '#e879f9', ev.tRecSlow],
+        ['50/51-F1 Feeder CB', '#4ade80', ev.tFdr],
+        ['50/51-IND Sub-Tx CB', '#34d399', ev.tInd],
+        ['50/51-LV Main VCB', '#fbbf24', ev.tLv],
+        [ev.topoCurveLabel, '#38bdf8', ev.tTopo]
+      ].filter(([, , t]) => t !== null && t !== undefined).sort((a, b) => a[2] - b[2]);
+
+      const seqRowsHtml = seqCandidates.length
+        ? seqCandidates.map(([name, col, t], idx) => {
+            const nextT = idx + 1 < seqCandidates.length ? seqCandidates[idx + 1][2] : null;
+            const cti = nextT !== null ? +(nextT - t).toFixed(3) : null;
+            return `<tr><td style="color:${col};font-weight:700;">t${idx+1}: ${name}</td><td style="font-family:monospace;color:#f8fafc;">${t.toFixed(3)} s</td><td style="font-family:monospace;color:#fde68a;">${(t * 60).toFixed(1)} cyc</td><td style="font-family:monospace;color:${cti!==null?(cti>=0.25?'#34d399':'#fbbf24'):'#94a3b8'};">${cti!==null?('+'+cti.toFixed(3)+' s'):'Backup'}</td></tr>`;
+          }).join('')
+        : '<tr><td colspan="4" style="color:#94a3b8;">Below Relay Pickup — Increase I_fault</td></tr>';
+
+      const pinBannerHtml = pin ? `
+        <div style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; padding:7px 10px; margin-bottom:8px; background:rgba(127,29,29,0.45); border:1px solid #f43f5e; border-radius:6px; font-size:10.8px;">
+          <div>
+            <strong style="color:#fef08a;">📌 ACTIVE PINNED FAULT ON TCC:</strong>
+            <span style="color:#fecdd3;">${pin.nodeLabel} · <strong>${(pin.faultType||'3ph').toUpperCase()}</strong> · I<sub>f,sym</sub> = <strong style="color:#fff;">${pin.iSymKa.toFixed(2)} kA (${pin.iAmpsPlot.toLocaleString()} A @ ${refKv} kV)</strong></span>
+          </div>
+          <button class="tcc-topo-pill" onclick="setTccControl('clearPin',true)" style="border-color:#fda4af;color:#fecdd3;">Clear Fault Pin</button>
+        </div>
+      ` : '';
+
+      const activeRelayKey = (ts.focusedRelay && ts.focusedRelay !== 'all') ? ts.focusedRelay : '21';
+      const relayCardGroupMap = {
+        '21': 'line_21_87b', '87B': 'line_21_87b', '87T': 'tx_87t', '50_51_lv': 'tx_87t',
+        '51G': 'tx_87t', '50_51_f1': 'fdr_50_51', 'recloser': 'fdr_50_51',
+        'ind_21_51': 'ind_21_51', 'line_21_87b': 'line_21_87b', 'tx_87t': 'tx_87t', 'fdr_50_51': 'fdr_50_51'
+      };
+      const focusedGroup = relayCardGroupMap[ts.focusedRelay] || null;
+      const relayButtons = [
+        ['21', '21 Line Dist'], ['87B', '87B Bus Diff'], ['87T', '87T Xfmr Diff'],
+        ['50_51_lv', '50/51-LV Main'], ['51G', '51G X0 NGR'], ['50_51_f1', '50/51-F1 Feeder'],
+        ['recloser', '79-ACR1 / 34-SECT']
+      ];
+      const zoneActive = (AppState.activeProtectionZone3D === activeRelayKey);
+      const fuseSaveOk = (ev.tRecFast !== null && ev.tFuseMin !== null && ev.tFuseClear !== null && ev.tRecSlow !== null)
+        ? (ev.tRecFast < ev.tFuseMin && ev.tFuseClear < ev.tRecSlow && (ev.tFdr === null || ev.tRecSlow < ev.tFdr))
+        : null;
+
       body.innerHTML = `
+        ${pinBannerHtml}
         <div class="tcc-topo-bar">
           <span style="font-size:10.5px; color:#94a3b8; font-weight:700; margin-right:4px;">SCHEME:</span>
           ${Object.keys(LAND_TOPO_FACTORS).map(k => `
             <button class="tcc-topo-pill ${topo === k ? 'active' : ''}" onclick="setTccControl('topo','${k}')">${LAND_TOPO_FACTORS[k].label}</button>
           `).join('')}
           <span style="margin-left:auto; display:flex; gap:6px; align-items:center;">
-            <button class="tcc-topo-pill ${ts.refSide==='lv'?'active':''}" onclick="setTccControl('refSide','lv')">Ref: ${sched.vs.lvKv} kV LV</button>
+            <button class="tcc-topo-pill ${ts.refSide==='lv'?'active':''}" onclick="setTccControl('refSide','lv')">Ref: ${sched.distKv} kV LV</button>
             <button class="tcc-topo-pill ${ts.refSide==='hv'?'active':''}" onclick="setTccControl('refSide','hv')">Ref: ${sched.vs.hvKv} kV HV</button>
             <button class="tcc-topo-pill ${ts.splitContingency?'active':''}" onclick="setTccControl('splitContingency', ${!ts.splitContingency})" title="Toggle N-1 single-branch outage on Ring / 1.5 CB / 2.0 CB">${ts.splitContingency ? 'N-1 Single-Path ON' : 'Normal Parallel Flow'}</button>
+          </span>
+        </div>
+
+        <div class="tcc-topo-bar" style="margin-bottom:8px; border-color:rgba(250,204,21,0.28);">
+          <span style="font-size:10px; color:#fde047; font-weight:700; margin-right:4px;">CURVE FOCUS:</span>
+          <button class="tcc-topo-pill ${(ts.viewMode!=='all' && ts.viewMode!=='isolate' && ts.focusedRelay && ts.focusedRelay!=='all') ? 'active' : ''}" onclick="setTccControl('viewMode','highlight')">Highlight Selected Relay</button>
+          <button class="tcc-topo-pill ${(ts.viewMode==='isolate' && ts.focusedRelay && ts.focusedRelay!=='all') ? 'active' : ''}" onclick="setTccControl('viewMode','isolate')">Isolate Selected Relay Only</button>
+          <button class="tcc-topo-pill ${(ts.viewMode==='all' || !ts.focusedRelay || ts.focusedRelay==='all') ? 'active' : ''}" onclick="setTccControl('focusedRelay','all')">Show All Curves</button>
+          <span style="margin-left:auto; display:flex; flex-wrap:wrap; gap:4px; align-items:center;">
+            ${[['all','All'], ...relayButtons].map(([rk, rlbl]) => `
+              <button class="tcc-topo-pill ${((ts.focusedRelay||'all') === rk) ? 'active' : ''}" onclick="setTccControl('focusedRelay','${rk}')" style="font-size:9.5px; padding:2px 7px;">${rlbl}</button>
+            `).join('')}
           </span>
         </div>
 
@@ -4258,8 +6254,8 @@ def get_js_app_core():
             </div>
           </div>
 
-          <div class="analysis-panel" style="display:flex; flex-direction:column; gap:8px;">
-            <h4>Live CTI &amp; Trip Times @ ${ts.cursorAmp.toLocaleString()} A (${refKv} kV)</h4>
+          <div class="analysis-panel" style="display:flex; flex-direction:column; gap:7px;">
+            <h4>Sequence of Operation @ ${evalAmp.toLocaleString()} A (${refKv} kV)</h4>
             <div class="analysis-kpi-grid">
               <div class="analysis-kpi"><span>50/51-F1 Feeder Clear</span><strong style="color:#4ade80;">${ev.tFdr !== null ? ev.tFdr.toFixed(3)+' s' : 'NO PICKUP'}</strong></div>
               <div class="analysis-kpi"><span>50/51-LV Main Clear</span><strong style="color:#fbbf24;">${ev.tLv !== null ? ev.tLv.toFixed(3)+' s' : 'NO PICKUP'}</strong></div>
@@ -4267,30 +6263,36 @@ def get_js_app_core():
               <div class="analysis-kpi"><span>IEEE C57.109 TR-01 Limit</span><strong style="color:#f87171;">${ev.tDmg !== null ? ev.tDmg.toFixed(2)+' s' : '> 900 s'}</strong></div>
             </div>
 
-            <div style="background:rgba(2,6,23,0.75); border:1px solid rgba(148,163,184,0.2); border-radius:6px; padding:8px 10px; font-size:10.5px; line-height:1.55;">
+            <div style="background:rgba(2,6,23,0.85); border:1px solid rgba(56,189,248,0.25); border-radius:6px; padding:6px 8px;">
+              <div style="font-size:10px; font-weight:700; color:#7dd3fc; margin-bottom:4px;">⚡ Operating Point Trip Times &amp; CTI Table (60 Hz)</div>
+              <table class="relay-schedule-table" style="width:100%; font-size:9.8px;">
+                <thead><tr style="color:#94a3b8; border-bottom:1px solid rgba(148,163,184,0.2);"><td>Device Curve</td><td>t_op</td><td>Cycles</td><td>CTI Next</td></tr></thead>
+                <tbody>${seqRowsHtml}</tbody>
+              </table>
+            </div>
+
+            <div style="background:rgba(2,6,23,0.75); border:1px solid rgba(148,163,184,0.2); border-radius:6px; padding:6px 9px; font-size:10px; line-height:1.45;">
               <div style="display:flex; justify-content:space-between;">
-                <span style="color:#94a3b8;">CTI₁ (51-LV − 51-F1):</span>
-                <strong style="color:${cti12Ok?'#34d399':'#f87171'}; font-family:monospace;">${ev.cti12 !== null ? ev.cti12.toFixed(3)+' s' : '—'} (Req ≥ 0.25–0.30 s)</strong>
+                <span style="color:#d8b4fe;">79-ACR1 Fast vs 100K Fuse:</span>
+                <strong style="color:${fuseSaveOk===false?'#f87171':'#a855f7'}; font-family:monospace;">${ev.tRecFast!==null?ev.tRecFast.toFixed(3)+'s':'—'} &lt; ${ev.tFuseMin!==null?ev.tFuseMin.toFixed(3)+'s':'—'}</strong>
               </div>
               <div style="display:flex; justify-content:space-between;">
-                <span style="color:#94a3b8;">CTI₂ (HV/Tie − 51-LV):</span>
-                <strong style="color:${cti23Ok?'#34d399':'#f87171'}; font-family:monospace;">${ev.cti23 !== null ? ev.cti23.toFixed(3)+' s' : '—'} (Req ≥ 0.25–0.30 s)</strong>
+                <span style="color:#fdba74;">100K Clear vs 79-ACR1 Slow:</span>
+                <strong style="color:${fuseSaveOk===false?'#f87171':'#e879f9'}; font-family:monospace;">${ev.tFuseClear!==null?ev.tFuseClear.toFixed(3)+'s':'—'} &lt; ${ev.tRecSlow!==null?ev.tRecSlow.toFixed(3)+'s':'—'}</strong>
               </div>
-              <div style="display:flex; justify-content:space-between;">
-                <span style="color:#94a3b8;">87T / 87B High-Speed Zone:</span>
-                <strong style="color:#c084fc; font-family:monospace;">0.025 s (1.5 cyc)</strong>
-              </div>
-              <div style="margin-top:4px; color:#cbd5e1; font-size:10px;">
-                <em>Parallel Split Multiplier:</em> <strong>${ev.branchFactor.toFixed(2)}×</strong> (${ts.splitContingency ? 'Single-leg contingency concentrates 100% fault' : 'Topology active branch share'})
+              <div style="margin-top:3px; color:#cbd5e1;">
+                <em>Branch Share:</em> <strong>${ev.branchFactor.toFixed(2)}×</strong> · <span style="color:#94a3b8;">Mode: ${(sched.sz&&sched.sz.mode||'autosize').toUpperCase()} (${sched.lvCtPri}:5 CT)</span>
               </div>
             </div>
 
-            <div style="font-size:10px; color:#94a3b8; line-height:1.45;">
+            <div style="font-size:9.8px; color:#94a3b8; line-height:1.45;">
               <strong style="color:#e2e8f0;">Legend:</strong>
-              <span style="color:#4ade80;">■ Feeder 50/51-F1</span> ·
-              <span style="color:#fbbf24;">■ Main 50/51-LV</span> ·
-              <span style="color:#38bdf8;">■ ${ev.topoCurveLabel}</span> ·
-              <span style="color:#f87171;">┈ C57.109 Damage (0.58× Δ-Y)</span>
+              <span style="color:#a855f7;">┈ 79-ACR1 Fast</span> ·
+              <span style="color:#fb923c;">■ 100K Fuse</span> ·
+              <span style="color:#4ade80;">■ 51-F1</span> ·
+              <span style="color:#34d399;">■ 51-IND</span> ·
+              <span style="color:#fbbf24;">■ 51-LV</span> ·
+              <span style="color:#38bdf8;">■ ${ev.topoCurveLabel}</span>
             </div>
           </div>
         </div>
@@ -4298,13 +6300,30 @@ def get_js_app_core():
         ${verdictHtml}
 
         <div style="margin-top:12px;">
+          <div style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:6px; margin-bottom:6px;">
+            <span style="font-size:11px; color:#f8fafc; font-weight:700;">🔌 Relay Connection &amp; 125V DC Trip Schematic (CT/VT -> SEL Relay -> 52T):</span>
+            <div style="display:flex; flex-wrap:wrap; gap:5px; align-items:center;">
+              <button class="btn-zone-3d ${zoneActive ? 'active' : ''}" onclick="toggleProtectionZone3D('${activeRelayKey}')">${zoneActive ? '✅ 3D Zone Overlay ON (Hide)' : '🎯 Highlight Protection Zone in 3D Yard'}</button>
+              <button class="btn-zone-3d" style="background:rgba(14,116,144,0.35); border-color:#22d3ee; color:#cffafe;" onclick="jumpToProtectionZone3D('${activeRelayKey}')">👁 View Zone in 3D Yard</button>
+            </div>
+          </div>
+          <div class="tcc-topo-bar" style="margin-bottom:8px;">
+            <span style="font-size:10px; color:#94a3b8; font-weight:700; margin-right:4px;">SELECT RELAY:</span>
+            ${relayButtons.map(([rk, rlbl]) => `
+              <button class="tcc-topo-pill ${activeRelayKey === rk ? 'active' : ''}" onclick="setTccControl('focusedRelay','${rk}')">${rlbl}</button>
+            `).join('')}
+          </div>
+          ${renderRelayElementarySvg(activeRelayKey, sched)}
+        </div>
+
+        <div style="margin-top:12px;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-            <h4 style="margin:0; font-size:12px; color:#f8fafc;">📋 Complete Protective Relay Settings Schedule (${sched.vs.hvKv}/${sched.vs.lvKv} kV · ${LAND_TOPO_FACTORS[topo].label})</h4>
+            <h4 style="margin:0; font-size:12px; color:#f8fafc;">📋 Complete Protective Relay Settings Schedule (${sched.vs.hvKv}/${sched.distKv} kV · ${LAND_TOPO_FACTORS[topo].label})</h4>
             ${ts.focusedRelay && ts.focusedRelay !== 'all' ? `<button class="btn" style="padding:3px 8px; font-size:10px;" onclick="setTccControl('focusedRelay','all')">Show All Panels Unfiltered</button>` : ''}
           </div>
           <div class="relay-card-grid">
             ${sched.cards.map(c => `
-              <div class="relay-setting-card ${ts.focusedRelay === c.id ? 'focused' : ''}">
+              <div class="relay-setting-card ${(focusedGroup === c.id || ts.focusedRelay === c.id) ? 'focused' : ''}" onclick="setTccControl('focusedRelay','${c.id}')" style="cursor:pointer;" title="Click to Highlight/Isolate Relay Curve on TCC Plot">
                 <h5><span>${c.title}</span><span class="relay-badge">${c.badge}</span></h5>
                 <div style="font-size:10px; color:#fbbf24; font-family:monospace; margin-bottom:5px; font-weight:700;">${c.ansi}</div>
                 <table class="relay-schedule-table">
@@ -4327,7 +6346,7 @@ def get_js_app_core():
           const px = ((e.clientX - rect.left) / Math.max(1, rect.width)) * canvas.width;
           const padL = 56, padR = 18;
           const plotW = canvas.width - padL - padR;
-          const logMinI = 1.6, logMaxI = 5.0; // ~40 A to 100,000 A
+          const logMinI = 1.6, logMaxI = 5.0;
           const frac = Math.max(0, Math.min(1, (px - padL) / plotW));
           const amp = Math.round(Math.pow(10, logMinI + frac * (logMaxI - logMinI)));
           setTccControl('cursorAmp', amp);
@@ -4401,10 +6420,41 @@ def get_js_app_core():
       ctx.fillText('Operating Time t (Seconds) — Log Scale', 0, 0);
       ctx.restore();
 
-      const plotCurve = (color, dashed, width, fn) => {
+      const focusKey = (ts && ts.focusedRelay) ? ts.focusedRelay : 'all';
+      const viewMode = (focusKey === 'all' || !ts || ts.viewMode === 'all')
+        ? 'all'
+        : (ts.viewMode === 'isolate' ? 'isolate' : 'highlight');
+      const focusCurveMap = {
+        recloser: ['recFast', 'fuseMin', 'fuseClear', 'recSlow', 'sect'],
+        fdr_50_51: ['fdr', 'recFast', 'fuseMin', 'fuseClear', 'recSlow', 'sect'],
+        '50_51_f1': ['fdr'],
+        '50_51_lv': ['lv', 'dmg'],
+        '51G': ['lv', 'dmg'],
+        '21': ['topo', 'dmg'],
+        line_21_87b: ['topo', 'diff', 'dmg'],
+        '87T': ['diff', 'dmg'],
+        '87B': ['diff', 'dmg'],
+        tx_87t: ['diff', 'dmg', 'lv']
+      };
+      const activeCurveList = focusCurveMap[focusKey] || null;
+      const isFocusedCurve = (key) => (viewMode === 'all' || !activeCurveList || activeCurveList.includes(key));
+
+      const plotCurve = (curveKey, color, dashed, width, fn) => {
+        const focused = isFocusedCurve(curveKey);
+        if (viewMode === 'isolate' && !focused) return;
         ctx.save();
         ctx.strokeStyle = color;
-        ctx.lineWidth = width;
+        if (viewMode === 'highlight' && !focused) {
+          ctx.globalAlpha = 0.20;
+          ctx.lineWidth = Math.max(1.2, width * 0.55);
+        } else if (viewMode !== 'all' && focused) {
+          ctx.globalAlpha = 1.0;
+          ctx.lineWidth = 4.0;
+          ctx.shadowColor = color;
+          ctx.shadowBlur = 9;
+        } else {
+          ctx.lineWidth = width;
+        }
         if (dashed) ctx.setLineDash([6, 4]);
         ctx.beginPath();
         let started = false;
@@ -4424,27 +6474,129 @@ def get_js_app_core():
       };
 
       const evAt = (amp) => evaluateTccAtCurrent(amp, sched, topo, ts.refSide, ts.splitContingency);
+      // Curve 0A: Pole Recloser 79-ACR1 Fast Curve A (Violet Dashed)
+      plotCurve('recFast', '#a855f7', true, 2.0, (a) => evAt(a).tRecFast);
+      // Curve 0B: Lateral Cutout Fuse 100K Min Melt (Orange Dashed) & Total Clear (Orange Solid)
+      plotCurve('fuseMin', '#fb923c', true, 1.8, (a) => evAt(a).tFuseMin);
+      plotCurve('fuseClear', '#fb923c', false, 2.1, (a) => evAt(a).tFuseClear);
+      // Curve 0C: Pole Recloser 79-ACR1 Slow Curve B/C (Magenta Solid)
+      plotCurve('recSlow', '#e879f9', false, 2.1, (a) => evAt(a).tRecSlow);
       // Curve 1: Feeder 50/51-F1 (Green)
-      plotCurve('#4ade80', false, 2.4, (a) => evAt(a).tFdr);
+      plotCurve('fdr', '#4ade80', false, 2.4, (a) => evAt(a).tFdr);
+      // Curve 1B: Dedicated Industrial 50/51-IND (Emerald Dashed)
+      plotCurve('ind', '#34d399', true, 1.9, (a) => evAt(a).tInd);
       // Curve 2: LV Main 50/51-LV (Amber)
-      plotCurve('#fbbf24', false, 2.4, (a) => evAt(a).tLv);
+      plotCurve('lv', '#fbbf24', false, 2.4, (a) => evAt(a).tLv);
       // Curve 3: Topology-specific Primary / Bus Backup (Cyan)
-      plotCurve('#38bdf8', false, 2.4, (a) => evAt(a).tTopo);
+      plotCurve('topo', '#38bdf8', false, 2.4, (a) => evAt(a).tTopo);
       // Curve 4: IEEE C57.109 TR-01 Thermal/Mechanical Damage Curve (Red Dashed)
-      plotCurve('#f87171', true, 2.1, (a) => evAt(a).tDmg);
+      plotCurve('dmg', '#f87171', true, 2.1, (a) => evAt(a).tDmg);
 
       // 87B/87T High-Speed Differential Floor Line (Purple Dashed)
-      ctx.save();
-      ctx.strokeStyle = '#c084fc';
-      ctx.lineWidth = 1.6;
-      ctx.setLineDash([4, 3]);
-      const yDiff = yOfT(0.025);
-      ctx.beginPath(); ctx.moveTo(padL, yDiff); ctx.lineTo(padL + plotW, yDiff); ctx.stroke();
-      ctx.fillStyle = '#d8b4fe';
-      ctx.font = 'bold 9.5px monospace';
-      ctx.textAlign = 'left';
-      ctx.fillText('87T / 87B Differential High-Speed Trip (0.025 s)', padL + 6, yDiff - 5);
-      ctx.restore();
+      const diffFocused = isFocusedCurve('diff');
+      if (viewMode !== 'isolate' || diffFocused) {
+        ctx.save();
+        if (viewMode === 'highlight' && !diffFocused) ctx.globalAlpha = 0.20;
+        else if (viewMode !== 'all' && diffFocused) {
+          ctx.lineWidth = 3.2;
+          ctx.shadowColor = '#c084fc';
+          ctx.shadowBlur = 8;
+        }
+        ctx.strokeStyle = '#c084fc';
+        ctx.lineWidth = (viewMode !== 'all' && diffFocused) ? 3.2 : 1.6;
+        ctx.setLineDash([4, 3]);
+        const yDiff = yOfT(0.025);
+        ctx.beginPath(); ctx.moveTo(padL, yDiff); ctx.lineTo(padL + plotW, yDiff); ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#d8b4fe';
+        ctx.font = 'bold 9.5px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText('87T / 87B Differential High-Speed Trip (0.025 s)', padL + 6, yDiff - 5);
+        ctx.restore();
+      }
+
+      // 34-SECT Electronic Sectionalizer Minimum Actuating Arming Line (Cyan Vertical Dashed)
+      const curEv = evAt(ts.cursorAmp);
+      const sectFocused = isFocusedCurve('sect');
+      if (viewMode !== 'isolate' || sectFocused) {
+        const sectX = xOfI(curEv.sectArmIp);
+        ctx.save();
+        if (viewMode === 'highlight' && !sectFocused) ctx.globalAlpha = 0.20;
+        ctx.strokeStyle = '#22d3ee';
+        ctx.lineWidth = (viewMode !== 'all' && sectFocused) ? 2.6 : 1.5;
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath(); ctx.moveTo(sectX, padT + 18); ctx.lineTo(sectX, padT + plotH); ctx.stroke();
+        ctx.fillStyle = '#67e8f9';
+        ctx.font = 'bold 9px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText(`34-SECT (ANSI 34) Arm=${Math.round(curEv.sectArmIp)}A | Cnt=2`, sectX + 4, padT + 26);
+        ctx.restore();
+      }
+
+      // Active Relay Pickup (Ip) Asymptote, Instantaneous (50) Threshold, & Technical Callout Box
+      if (viewMode !== 'all') {
+        const relayMeta = {
+          '50_51_f1': { label: '50/51-F1 Feeder Relay', col: '#4ade80', ip: curEv.fdrIp, inst: curEv.fdrInst, tds: '0.70 (VI)', top: curEv.tFdr },
+          fdr_50_51:  { label: '50/51-F1 + 79-ACR1',   col: '#4ade80', ip: curEv.fdrIp, inst: curEv.fdrInst, tds: '0.70 (VI)', top: curEv.tFdr },
+          recloser:   { label: '79-ACR1 + 100K + 34-SECT', col: '#a855f7', ip: curEv.recIp, inst: null, tds: 'A=Fast / B=0.50', top: curEv.tRecFast },
+          '50_51_lv': { label: '50/51-LV Main Breaker', col: '#fbbf24', ip: curEv.lvIp, inst: curEv.lvIp * 8.5, tds: '1.25 (VI)', top: curEv.tLv },
+          '51G':      { label: '51G X0 Neutral Ground', col: '#fbbf24', ip: curEv.lvIp, inst: null, tds: '1.25 (VI)', top: curEv.tLv },
+          '21':       { label: curEv.topoCurveLabel, col: '#38bdf8', ip: curEv.hvIp * curEv.branchFactor, inst: curEv.hvIp * 4.5, tds: `VI (${curEv.branchFactor.toFixed(2)}x)`, top: curEv.tTopo },
+          line_21_87b:{ label: curEv.topoCurveLabel, col: '#38bdf8', ip: curEv.hvIp * curEv.branchFactor, inst: curEv.hvIp * 4.5, tds: `VI (${curEv.branchFactor.toFixed(2)}x)`, top: curEv.tTopo },
+          '87T':      { label: '87T Xfmr Differential', col: '#c084fc', ip: curEv.hvIp * 4.5, inst: curEv.hvIp * 4.5, tds: '0.025 s (High-Spd)', top: 0.025 },
+          '87B':      { label: '87B Bus Differential', col: '#c084fc', ip: curEv.hvIp * 4.5, inst: curEv.hvIp * 4.5, tds: '0.025 s (High-Spd)', top: 0.025 },
+          tx_87t:     { label: '87T + C57.109 Backup', col: '#c084fc', ip: curEv.lvIp, inst: curEv.hvIp * 4.5, tds: '0.025 s / C57.109', top: 0.025 }
+        }[focusKey];
+
+        if (relayMeta) {
+          const clampX = (px) => Math.max(padL + 2, Math.min(padL + plotW - 2, px));
+          if (relayMeta.ip) {
+            const ipX = clampX(xOfI(relayMeta.ip));
+            ctx.save();
+            ctx.strokeStyle = relayMeta.col;
+            ctx.lineWidth = 1.6;
+            ctx.setLineDash([3, 3]);
+            ctx.beginPath(); ctx.moveTo(ipX, padT); ctx.lineTo(ipX, padT + plotH); ctx.stroke();
+            ctx.fillStyle = relayMeta.col;
+            ctx.font = 'bold 9.5px monospace';
+            ctx.textAlign = ipX > padL + plotW - 78 ? 'right' : 'left';
+            ctx.fillText(`Ip=${Math.round(relayMeta.ip)}A`, ipX + (ipX > padL + plotW - 78 ? -4 : 4), padT + plotH - 8);
+            ctx.restore();
+          }
+          if (relayMeta.inst) {
+            const instX = clampX(xOfI(relayMeta.inst));
+            ctx.save();
+            ctx.strokeStyle = '#f43f5e';
+            ctx.lineWidth = 1.6;
+            ctx.setLineDash([2, 3]);
+            ctx.beginPath(); ctx.moveTo(instX, padT + 14); ctx.lineTo(instX, padT + plotH); ctx.stroke();
+            ctx.fillStyle = '#fda4af';
+            ctx.font = 'bold 9px monospace';
+            ctx.textAlign = instX > padL + plotW - 82 ? 'right' : 'left';
+            ctx.fillText(`50=${Math.round(relayMeta.inst)}A`, instX + (instX > padL + plotW - 82 ? -4 : 4), padT + plotH - 22);
+            ctx.restore();
+          }
+          const boxW = 205, boxH = 62;
+          const bx = padL + plotW - boxW - 8, by = padT + 8;
+          ctx.save();
+          ctx.fillStyle = 'rgba(2, 6, 23, 0.90)';
+          ctx.strokeStyle = relayMeta.col;
+          ctx.lineWidth = 1.4;
+          ctx.fillRect(bx, by, boxW, boxH);
+          ctx.strokeRect(bx, by, boxW, boxH);
+          ctx.fillStyle = relayMeta.col;
+          ctx.font = 'bold 10px monospace';
+          ctx.textAlign = 'left';
+          ctx.fillText(`${viewMode === 'isolate' ? 'ISOLATE' : 'FOCUS'}: ${relayMeta.label}`, bx + 7, by + 15);
+          ctx.fillStyle = '#e2e8f0';
+          ctx.font = '9.5px monospace';
+          ctx.fillText(`Ip: ${Math.round(relayMeta.ip)}A | TDS: ${relayMeta.tds}`, bx + 7, by + 31);
+          ctx.fillText(`Inst 50: ${relayMeta.inst ? Math.round(relayMeta.inst) + 'A' : 'N/A'}`, bx + 7, by + 44);
+          ctx.fillStyle = '#fef08a';
+          ctx.fillText(`t_op @ ${ts.cursorAmp}A: ${relayMeta.top !== null && relayMeta.top !== undefined ? relayMeta.top.toFixed(3) + ' s' : 'NO PICKUP'}`, bx + 7, by + 57);
+          ctx.restore();
+        }
+      }
 
       // Interactive Vertical Fault Current Cursor + Live Intersection Dots & CTI Dimension Arrow
       const cx = xOfI(ts.cursorAmp);
@@ -4460,35 +6612,86 @@ def get_js_app_core():
       ctx.textAlign = cx > W - 95 ? 'right' : 'left';
       ctx.fillText(`If=${ts.cursorAmp.toLocaleString()}A`, cx + (cx > W - 95 ? -5 : 5), padT + 13);
 
-      const curEv = evAt(ts.cursorAmp);
       const pts = [];
-      if (curEv.tFdr !== null) pts.push({ t: curEv.tFdr, col: '#4ade80', lbl: `F1 ${curEv.tFdr.toFixed(2)}s` });
-      if (curEv.tLv !== null)  pts.push({ t: curEv.tLv,  col: '#fbbf24', lbl: `LV ${curEv.tLv.toFixed(2)}s` });
-      if (curEv.tTopo !== null)pts.push({ t: curEv.tTopo,col: '#38bdf8', lbl: `HV ${curEv.tTopo.toFixed(2)}s` });
+      if (curEv.tRecFast !== null)   pts.push({ key: 'recFast',   t: curEv.tRecFast,   col: '#a855f7', r: 3.5 });
+      if (curEv.tFuseMin !== null)   pts.push({ key: 'fuseMin',   t: curEv.tFuseMin,   col: '#fb923c', r: 3.5 });
+      if (curEv.tFuseClear !== null) pts.push({ key: 'fuseClear', t: curEv.tFuseClear, col: '#fdba74', r: 3.5 });
+      if (curEv.tRecSlow !== null)   pts.push({ key: 'recSlow',   t: curEv.tRecSlow,   col: '#e879f9', r: 3.5 });
+      if (curEv.tFdr !== null)       pts.push({ key: 'fdr',       t: curEv.tFdr,       col: '#4ade80', r: 4.5 });
+      if (curEv.tLv !== null)        pts.push({ key: 'lv',        t: curEv.tLv,        col: '#fbbf24', r: 4.5 });
+      if (curEv.tTopo !== null)      pts.push({ key: 'topo',      t: curEv.tTopo,      col: '#38bdf8', r: 4.5 });
 
       pts.forEach(pt => {
+        const focused = isFocusedCurve(pt.key);
+        if (viewMode === 'isolate' && !focused) return;
         const py = yOfT(pt.t);
+        ctx.save();
+        if (viewMode === 'highlight' && !focused) ctx.globalAlpha = 0.25;
         ctx.fillStyle = pt.col;
-        ctx.beginPath(); ctx.arc(cx, py, 4.5, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(cx, py, (viewMode !== 'all' && focused) ? (pt.r + 1.4) : (pt.r || 4.5), 0, Math.PI * 2); ctx.fill();
         ctx.strokeStyle = '#020617'; ctx.lineWidth = 1.4; ctx.stroke();
+        ctx.restore();
       });
 
-      if (curEv.tFdr !== null && curEv.tLv !== null && curEv.tLv > curEv.tFdr) {
+      if ((viewMode !== 'isolate' || (isFocusedCurve('fdr') && isFocusedCurve('lv'))) && curEv.tFdr !== null && curEv.tLv !== null && curEv.tLv > curEv.tFdr) {
         const y1 = yOfT(curEv.tFdr), y2 = yOfT(curEv.tLv);
         ctx.save();
+        if (viewMode === 'highlight' && !(isFocusedCurve('fdr') || isFocusedCurve('lv'))) ctx.globalAlpha = 0.25;
         ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 1.2;
         ctx.beginPath(); ctx.moveTo(cx + 9, y1); ctx.lineTo(cx + 9, y2); ctx.stroke();
         ctx.fillStyle = '#a7f3d0'; ctx.font = 'bold 9.5px monospace'; ctx.textAlign = 'left';
         ctx.fillText(`Δt=${curEv.cti12.toFixed(2)}s`, cx + 13, (y1 + y2) / 2 + 3);
         ctx.restore();
       }
-      if (curEv.tLv !== null && curEv.tTopo !== null && curEv.tTopo > curEv.tLv) {
+      if ((viewMode !== 'isolate' || (isFocusedCurve('lv') && isFocusedCurve('topo'))) && curEv.tLv !== null && curEv.tTopo !== null && curEv.tTopo > curEv.tLv) {
         const y1 = yOfT(curEv.tLv), y2 = yOfT(curEv.tTopo);
         ctx.save();
+        if (viewMode === 'highlight' && !(isFocusedCurve('lv') || isFocusedCurve('topo'))) ctx.globalAlpha = 0.25;
         ctx.strokeStyle = '#7dd3fc'; ctx.lineWidth = 1.2;
         ctx.beginPath(); ctx.moveTo(cx - 9, y1); ctx.lineTo(cx - 9, y2); ctx.stroke();
         ctx.fillStyle = '#7dd3fc'; ctx.font = 'bold 9.5px monospace'; ctx.textAlign = 'right';
         ctx.fillText(`Δt=${curEv.cti23.toFixed(2)}s`, cx - 13, (y1 + y2) / 2 + 3);
+        ctx.restore();
+      }
+
+      // Active Pinned Fault Line & Labeled Operating Point Dots (I_fault, t_trip)
+      const pin = ts && ts.pinnedFault ? ts.pinnedFault : null;
+      if (pin && pin.iAmpsPlot > 0) {
+        const fx = Math.max(padL + 2, Math.min(padL + plotW - 2, xOfI(pin.iAmpsPlot)));
+        const pinEv = evAt(pin.iAmpsPlot);
+        ctx.save();
+        ctx.strokeStyle = '#f43f5e';
+        ctx.lineWidth = 2.4;
+        ctx.shadowColor = '#f43f5e';
+        ctx.shadowBlur = 10;
+        ctx.setLineDash([7, 4]);
+        ctx.beginPath(); ctx.moveTo(fx, padT); ctx.lineTo(fx, padT + plotH); ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#f43f5e';
+        ctx.font = 'bold 10px monospace';
+        ctx.textAlign = fx > padL + plotW - 140 ? 'right' : 'left';
+        ctx.fillText(`⚡ FAULT ${pin.iSymKa.toFixed(2)} kA (${(pin.faultType||'3ph').toUpperCase()})`, fx + (fx > padL + plotW - 140 ? -6 : 6), padT + 27);
+
+        const opPts = [
+          ['79A-F', pinEv.tRecFast, '#a855f7'],
+          ['100K', pinEv.tFuseClear, '#fb923c'],
+          ['51-F1', pinEv.tFdr, '#4ade80'],
+          ['51-IND', pinEv.tInd, '#34d399'],
+          ['51-LV', pinEv.tLv, '#fbbf24'],
+          ['51-HV', pinEv.tTopo, '#38bdf8']
+        ].filter(([, t]) => t !== null && t !== undefined);
+
+        opPts.forEach(([tag, tVal, col], idx) => {
+          const py = yOfT(tVal);
+          ctx.fillStyle = col;
+          ctx.beginPath(); ctx.arc(fx, py, 5.2, 0, Math.PI * 2); ctx.fill();
+          ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.6; ctx.stroke();
+          ctx.fillStyle = '#fef08a';
+          ctx.font = 'bold 9px monospace';
+          const onRight = fx < padL + plotW - 95;
+          ctx.textAlign = onRight ? 'left' : 'right';
+          ctx.fillText(`${tag}: ${tVal.toFixed(3)}s (${(tVal*60).toFixed(1)}c)`, fx + (onRight ? 8 : -8), py + ((idx % 2 === 0) ? -4 : 10));
+        });
         ctx.restore();
       }
     }
@@ -4499,11 +6702,36 @@ def get_js_app_core():
       renderAnalysisModalBody();
     }
 
+    const PQ_PROBE_NODES = [
+      { id: 'ind_sub', label: 'Industrial Sub (69/138 kV)', short: 'IND-SUB', isHv: true, isDeltaHv: false, zScale: 0.85, w3: 0.10, w5: 1.25, w7: 1.28, w9: 0.05, w11: 1.35, w13: 1.30, w15: 0.04 },
+      { id: 'cbd_bus', label: 'CBD / Hospital 750 kVA (13.8 kV)', short: 'CBD 750', isHv: false, isDeltaHv: false, zScale: 1.18, w3: 1.25, w5: 1.30, w7: 1.24, w9: 1.20, w11: 1.15, w13: 1.10, w15: 1.12 },
+      { id: 'urd_pad', label: 'URD Subdivision 150 kVA 6x (13.8 kV)', short: 'URD 150', isHv: false, isDeltaHv: false, zScale: 1.08, w3: 1.18, w5: 0.96, w7: 0.88, w9: 1.14, w11: 0.82, w13: 0.78, w15: 1.06 },
+      { id: 'res_50', label: 'RES 50 kVA Radial Lateral (13.8 kV)', short: 'RES 50', isHv: false, isDeltaHv: false, zScale: 1.32, w3: 1.08, w5: 0.68, w7: 0.60, w9: 1.04, w11: 0.55, w13: 0.50, w15: 0.95 },
+      { id: 'bus_a_138', label: 'Sub A 13.8 kV Main Bus A (4-Wire)', short: 'Bus A 13.8', isHv: false, isDeltaHv: false, zScale: 1.00, w3: 1.00, w5: 1.00, w7: 1.00, w9: 1.00, w11: 1.00, w13: 1.00, w15: 1.00 },
+      { id: 'tr01_pri_delta', label: 'TR-01 Primary Δ-Winding (HV Line)', short: 'TR-01 Δ HV', isHv: true, isDeltaHv: true, zScale: 0.36, w3: 0.00, w5: 0.38, w7: 0.36, w9: 0.00, w11: 0.34, w13: 0.32, w15: 0.00 },
+      { id: 'bus_b_138', label: 'Sub B 13.8 kV Tie Bus B', short: 'Bus B 13.8', isHv: false, isDeltaHv: false, zScale: 0.96, w3: 0.72, w5: 0.76, w7: 0.74, w9: 0.68, w11: 0.70, w13: 0.66, w15: 0.62 }
+    ];
+
+    window.attachPqProbeToNode = function(nodeKey) {
+      if (!PQ_PROBE_NODES.some(n => n.id === nodeKey)) return;
+      AppState.pqState.probeNodeA = nodeKey;
+      AppState.pqState.scenario = 'harmonics';
+      if (typeof openAnalysisModal === 'function') openAnalysisModal('pq');
+      const meta = PQ_PROBE_NODES.find(n => n.id === nodeKey);
+      if (typeof showToast === 'function' && meta) {
+        showToast('PQ Probe Ch.1 attached to ' + meta.label);
+      }
+    };
+
+    window.updatePqProbeControl = function(key, val) {
+      updatePqLabControl(key, val);
+    };
+
     function updatePqLabControl(key, val) {
       const pq = AppState.pqState;
-      if (key === 'detunedFilterOn' || key === 'saClampActive' || key === 'statcomActive' || key === 'oscPaused') {
+      if (key === 'detunedFilterOn' || key === 'saClampActive' || key === 'statcomActive' || key === 'oscPaused' || key === 'showOverlayB') {
         pq[key] = (val === true || val === 'true');
-      } else if (key === 'eventMode' || key === 'transientType') {
+      } else if (key === 'eventMode' || key === 'transientType' || key === 'probeNodeA' || key === 'probeNodeB') {
         pq[key] = val;
       } else {
         pq[key] = parseFloat(val);
@@ -4515,34 +6743,147 @@ def get_js_app_core():
       const pq = AppState.pqState;
       const vs = getVoltageSpec(AppState.voltageClass);
       const pfBase = computePowerFlowMetrics();
+      const branches = (typeof computeEnergizedBranches === 'function') ? computeEnergizedBranches() : null;
       const sLoad = pfBase.sLoadMva || (vs.mva * 0.72);
       const vNomKv = vs.lvKv;
       const iBaseA = pfBase.iLvA || (sLoad * 1000 / (Math.sqrt(3) * vNomKv));
 
-      // Harmonics calculations (IEEE 519-2022 & IEEE C57.110 K-Factor)
+      // Harmonics calculations (IEEE 519-2022 & IEEE C57.110 K-Factor) + 52-CAP Parallel Resonance
       const vfdScale = (pq.vfdLoadPct || 35) / 50;
       const filt3 = pq.detunedFilterOn ? 0.35 : 1.0;
       const filt5 = pq.detunedFilterOn ? 0.14 : 1.0;
       const filt7 = pq.detunedFilterOn ? 0.18 : 1.0;
       const filt11 = pq.detunedFilterOn ? 0.28 : 1.0;
-      const h3 = (pq.h3Pct || 0) * vfdScale * filt3;
-      const h5 = (pq.h5Pct || 0) * vfdScale * filt5;
-      const h7 = (pq.h7Pct || 0) * vfdScale * filt7;
-      const h11 = (pq.h11Pct || 0) * vfdScale * filt11;
-      const thdI = Math.sqrt(h3 * h3 + h5 * h5 + h7 * h7 + h11 * h11);
-      // Voltage THD scaled by transformer short-circuit impedance X_pu
+      const filt9 = pq.detunedFilterOn ? 0.22 : 1.0;
+      const filt13 = pq.detunedFilterOn ? 0.32 : 1.0;
+      const filt15 = pq.detunedFilterOn ? 0.25 : 1.0;
+
+      const baseH3 = (pq.h3Pct || 0) * vfdScale * filt3;
+      const baseH5 = (pq.h5Pct || 0) * vfdScale * filt5;
+      const baseH7 = (pq.h7Pct || 0) * vfdScale * filt7;
+      const baseH9 = (pq.h3Pct || 0) * 0.36 * vfdScale * filt9;
+      const baseH11 = (pq.h11Pct || 0) * vfdScale * filt11;
+      const baseH13 = (pq.h11Pct || 0) * 0.62 * vfdScale * filt13;
+      const baseH15 = (pq.h3Pct || 0) * 0.18 * vfdScale * filt15;
+
       const zPu = Math.max(0.04, vs.xPu || 0.08);
-      const thdV = Math.sqrt(
-        Math.pow((h3 / 100) * zPu * 3, 2) +
-        Math.pow((h5 / 100) * zPu * 5, 2) +
-        Math.pow((h7 / 100) * zPu * 7, 2) +
-        Math.pow((h11 / 100) * zPu * 11, 2)
-      ) * 100;
-      const i1Sq = 1.0;
-      const sumIhSq = i1Sq + Math.pow(h3 / 100, 2) + Math.pow(h5 / 100, 2) + Math.pow(h7 / 100, 2) + Math.pow(h11 / 100, 2);
-      const kFactor = (i1Sq + Math.pow(h3 / 100, 2) * 9 + Math.pow(h5 / 100, 2) * 25 + Math.pow(h7 / 100, 2) * 49 + Math.pow(h11 / 100, 2) * 121) / sumIhSq;
-      const deratingPct = Math.max(55, 100 - (kFactor - 1) * 1.45);
-      const iNeutralHarA = 3 * (h3 / 100) * iBaseA;
+      const capBankClosed = branches ? !!branches.capBank : (AppState.switchStates ? (AppState.switchStates.cbCap !== false) : true);
+      const capStageMvar = Math.max(0.9, pq.capStageMvar || 3.6);
+      const activeCapMvar = capBankClosed ? capStageMvar : ((pq.scenario === 'pf' && pq.capStageMvar > 0) ? pq.capStageMvar : 0);
+      const mvaScBus = (vs.mva || 25) / Math.max(0.05, zPu + 0.025);
+      const hRes = activeCapMvar > 0 ? Math.sqrt(mvaScBus / activeCapMvar) : 0;
+      const fResHz = hRes * 60;
+
+      const resGain = (order, localScale) => {
+        if (!capBankClosed && !(pq.scenario === 'pf' && pq.capStageMvar > 0)) return 1.0;
+        if (pq.detunedFilterOn) return 1.0; // p=7% detuned reactor shifts parallel resonance below 5th harmonic (~189 Hz)
+        const hrLocal = Math.sqrt((mvaScBus / Math.max(0.6, localScale)) / Math.max(0.45, activeCapMvar));
+        const ratio = order / Math.max(1.5, hrLocal);
+        const damping = 0.28;
+        const mag = 1.0 / Math.sqrt(Math.pow(1 - ratio * ratio, 2) + Math.pow(damping * ratio, 2));
+        return Math.min(3.4, Math.max(1.0, mag));
+      };
+
+      const isNodeEnergized = (id) => {
+        if (!branches) return true;
+        if (id === 'ind_sub') return branches.ind_hv !== false;
+        if (id === 'tr01_pri_delta') return branches.tx_hv !== false;
+        if (id === 'bus_a_138') return branches.sec_bus !== false;
+        if (id === 'cbd_bus') return branches.dist_f2_main !== false;
+        if (id === 'urd_pad') return branches.dist_f1_sec2 !== false;
+        if (id === 'res_50') return branches.dist_lateral !== false;
+        if (id === 'bus_b_138') return branches.subBLvEff !== false;
+        return true;
+      };
+
+      const nodalResults = {};
+      const nodalTable = [];
+      let tr01DeltaTrapCircA = 0;
+
+      PQ_PROBE_NODES.forEach(node => {
+        const en = isNodeEnergized(node.id);
+        const loopCoupleZ = (node.id === 'bus_b_138' && branches && branches.subB_lv_backfed_from_A) ? 1.28 : 1.0;
+        const zEff = zPu * node.zScale * loopCoupleZ;
+        const mult = en ? 1 : 0;
+
+        // Apply 52-CAP parallel resonance amplification to positive/negative-seq non-triplens (5,7,11,13)
+        // Triplens (3,9,15) are trapped in TR-01 closed Delta winding => 0% HV line-side pass-through at tr01_pri_delta
+        const nh3 = +(baseH3 * node.w3 * mult).toFixed(2);
+        const nh5 = +(baseH5 * node.w5 * (node.isDeltaHv ? 1.0 : resGain(5, node.zScale)) * mult).toFixed(2);
+        const nh7 = +(baseH7 * node.w7 * (node.isDeltaHv ? 1.0 : resGain(7, node.zScale)) * mult).toFixed(2);
+        const nh9 = +(baseH9 * node.w9 * mult).toFixed(2);
+        const nh11 = +(baseH11 * node.w11 * (node.isDeltaHv ? 1.0 : resGain(11, node.zScale)) * mult).toFixed(2);
+        const nh13 = +(baseH13 * node.w13 * (node.isDeltaHv ? 1.0 : resGain(13, node.zScale)) * mult).toFixed(2);
+        const nh15 = +(baseH15 * node.w15 * mult).toFixed(2);
+
+        const nThdI = Math.sqrt(nh3*nh3 + nh5*nh5 + nh7*nh7 + nh9*nh9 + nh11*nh11 + nh13*nh13 + nh15*nh15);
+        const nThdV = Math.sqrt(
+          Math.pow((nh3 / 100) * zEff * 3, 2) +
+          Math.pow((nh5 / 100) * zEff * 5, 2) +
+          Math.pow((nh7 / 100) * zEff * 7, 2) +
+          Math.pow((nh9 / 100) * zEff * 9, 2) +
+          Math.pow((nh11 / 100) * zEff * 11, 2) +
+          Math.pow((nh13 / 100) * zEff * 13, 2) +
+          Math.pow((nh15 / 100) * zEff * 15, 2)
+        ) * 100;
+        const ni1Sq = 1.0;
+        const nSumSq = ni1Sq + Math.pow(nh3/100,2) + Math.pow(nh5/100,2) + Math.pow(nh7/100,2) + Math.pow(nh9/100,2) + Math.pow(nh11/100,2) + Math.pow(nh13/100,2) + Math.pow(nh15/100,2);
+        const nKf = (ni1Sq + Math.pow(nh3/100,2)*9 + Math.pow(nh5/100,2)*25 + Math.pow(nh7/100,2)*49 + Math.pow(nh9/100,2)*81 + Math.pow(nh11/100,2)*121 + Math.pow(nh13/100,2)*169 + Math.pow(nh15/100,2)*225) / nSumSq;
+        const nKvStr = node.isHv ? (vs.hvKv + ' kV') : (vNomKv.toFixed(1) + ' kV');
+        const nodeBaseA = node.isHv ? (pfBase.iHvA || (sLoad * 1000 / (Math.sqrt(3) * vs.hvKv))) : iBaseA;
+        const triplenRmsPct = Math.sqrt(nh3*nh3 + nh9*nh9 + nh15*nh15);
+        const nNeutralA = node.isHv ? 0 : (3 * (triplenRmsPct / 100) * nodeBaseA);
+        const nDerate = Math.max(55, 100 - (nKf - 1) * 1.45);
+
+        if (node.id === 'tr01_pri_delta' && en) {
+          // Zero-sequence triplen current trapped inside TR-01 Delta primary winding (referred via turns ratio)
+          const lvTriplenA = 3 * (Math.sqrt(baseH3*baseH3 + baseH9*baseH9 + baseH15*baseH15) / 100) * iBaseA;
+          tr01DeltaTrapCircA = +(lvTriplenA * (vNomKv / (Math.sqrt(3) * vs.hvKv))).toFixed(1);
+        }
+
+        const resObj = {
+          ...node,
+          energized: en,
+          kvLabel: nKvStr,
+          zEffPu: +zEff.toFixed(4),
+          h3: nh3, h5: nh5, h7: nh7, h9: nh9, h11: nh11, h13: nh13, h15: nh15,
+          thdI: +nThdI.toFixed(2),
+          thdV: +nThdV.toFixed(2),
+          kFactor: +nKf.toFixed(2),
+          deratingPct: +nDerate.toFixed(1),
+          iNeutralHarA: +nNeutralA.toFixed(1),
+          iNeutralPctOfPhase: nodeBaseA > 0 ? +((nNeutralA / nodeBaseA) * 100).toFixed(1) : 0,
+          triplenLinePassPct: node.isDeltaHv ? 0.0 : +triplenRmsPct.toFixed(2),
+          ieee519Pass: nThdV <= 5.0
+        };
+        nodalResults[node.id] = resObj;
+        nodalTable.push(resObj);
+      });
+
+      const activeNodeA = nodalResults[pq.probeNodeA] || nodalResults['bus_a_138'];
+      const activeNodeB = nodalResults[pq.probeNodeB] || nodalResults['tr01_pri_delta'];
+      const h3 = activeNodeA.h3;
+      const h5 = activeNodeA.h5;
+      const h7 = activeNodeA.h7;
+      const h9 = activeNodeA.h9;
+      const h11 = activeNodeA.h11;
+      const h13 = activeNodeA.h13;
+      const h15 = activeNodeA.h15;
+      const thdI = activeNodeA.thdI;
+      const thdV = activeNodeA.thdV;
+      const kFactor = activeNodeA.kFactor;
+      const deratingPct = activeNodeA.deratingPct;
+      const iNeutralHarA = activeNodeA.iNeutralHarA;
+      const iDeltaCircA = tr01DeltaTrapCircA;
+      const capResonance = {
+        active: capBankClosed || (pq.scenario === 'pf' && pq.capStageMvar > 0),
+        detuned: !!pq.detunedFilterOn,
+        capMvar: +activeCapMvar.toFixed(2),
+        mvaScBus: +mvaScBus.toFixed(1),
+        hRes: +hRes.toFixed(2),
+        fResHz: +fResHz.toFixed(0),
+        nearHarmonicHit: (!pq.detunedFilterOn && (capBankClosed || pq.capStageMvar > 0) && hRes > 4.1 && hRes < 14.5)
+      };
 
       // PF & Cap Bank
       const pfOld = Math.max(0.65, Math.min(0.99, pq.nativePf || 0.78));
@@ -4584,7 +6925,8 @@ def get_js_app_core():
 
       return {
         pq, vs, vNomKv, iBaseA,
-        h3, h5, h7, h11, thdI, thdV, kFactor, deratingPct, iNeutralHarA,
+        h3, h5, h7, h9, h11, h13, h15, thdI, thdV, kFactor, deratingPct, iNeutralHarA,
+        activeNodeA, activeNodeB, nodalResults, nodalTable, iDeltaCircA, capResonance,
         pfOld, pfNew, pfLeadLag, phiOldDeg, phiNewDeg, qOld, qCap, qNew, mvaReleased, lossRedPct, deltaVCapPct,
         vuf, iuf, motorDeratePct, ngrNeutralA,
         isSag, eventPu, cyc, iticPass,
@@ -4659,24 +7001,29 @@ def get_js_app_core():
             </div>
           </div>
           <div class="analysis-slider-row">
-            <label>4.7% Detuned Harmonic Filter Trap
+            <label>4.7% Detuned Filter Trap &amp; 52-CAP Resonance
               <button class="btn" style="padding:3px 10px; font-size:10px; background:${pq.detunedFilterOn?'rgba(16,185,129,0.22)':'rgba(239,68,68,0.22)'};" onclick="updatePqLabControl('detunedFilterOn', ${!pq.detunedFilterOn})">
-                ${pq.detunedFilterOn ? 'FILTER IN (TUNED)' : 'FILTER OUT'}
+                ${pq.detunedFilterOn ? 'FILTER IN (DETUNED 189Hz)' : 'FILTER OUT (RESONANCE RISK)'}
               </button>
             </label>
           </div>
         `;
         const pass519 = m.thdV <= 5.0;
+        const lvNeutralRef = (m.nodalResults && m.nodalResults.bus_a_138) ? m.nodalResults.bus_a_138 : m;
         stdCheck = {
-          pass: pass519,
-          badge: pass519 ? 'IEEE 519 PASS (THD_V ≤ 5%)' : 'IEEE 519 VIOLATION (THD_V > 5%)',
-          note: `TR-01 K-Factor = ${m.kFactor.toFixed(2)} requiring derating to ${m.deratingPct.toFixed(1)}% capacity. Engage 4.7% filter to trap 5th/7th harmonics.`
+          pass: pass519 && !m.capResonance.nearHarmonicHit,
+          badge: pass519 ? (m.capResonance.nearHarmonicHit ? 'CAP RESONANCE RISK' : 'IEEE 519 PASS (THD_V ≤ 5%)') : 'IEEE 519 VIOLATION (THD_V > 5%)',
+          note: m.activeNodeA.isDeltaHv
+            ? `TR-01 Δ Primary isolates 100% of zero-sequence triplens (0.0% pass-through to ${m.vs.hvKv} kV HV source; ${m.iDeltaCircA.toFixed(1)} A trapped circulating inside Δ).`
+            : `Node ${m.activeNodeA.short}: K-Factor = ${m.kFactor.toFixed(2)} (derating ${m.deratingPct.toFixed(1)}%). ${m.capResonance.active ? `52-CAP parallel resonance f_r = ${m.capResonance.fResHz} Hz (h=${m.capResonance.hRes}).` : '52-CAP OPEN (no parallel resonance).'}`
         };
         diagHtml = `
-          <div class="analysis-kpi"><span>Voltage THD_V (IEEE 519)</span><strong style="color:${pass519?'#10b981':'#ef4444'};">${m.thdV.toFixed(2)} % (Limit 5.0%)</strong></div>
-          <div class="analysis-kpi"><span>Current THD_I</span><strong>${m.thdI.toFixed(2)} %</strong></div>
+          <div class="analysis-kpi"><span>Voltage THD_V (${m.activeNodeA.short})</span><strong style="color:${pass519?'#10b981':'#ef4444'};">${m.thdV.toFixed(2)} % (Limit 5.0%)</strong></div>
+          <div class="analysis-kpi"><span>Current THD_I (${m.activeNodeA.kvLabel})</span><strong>${m.thdI.toFixed(2)} %</strong></div>
+          <div class="analysis-kpi"><span>TR-01 Δ-Winding Triplen Trap</span><strong style="color:#10b981;">HV Line 0.0% (${m.iDeltaCircA.toFixed(1)} A Δ-Circ)</strong></div>
+          <div class="analysis-kpi"><span>13.8kV Neutral Overload (3×I_0h)</span><strong style="color:${lvNeutralRef.iNeutralPctOfPhase>65?'#f87171':'#fbbf24'};">${lvNeutralRef.iNeutralHarA.toFixed(0)} A (${lvNeutralRef.iNeutralPctOfPhase.toFixed(1)}% Iφ)</strong></div>
           <div class="analysis-kpi"><span>TR-01 K-Factor / Derating</span><strong>K-${m.kFactor.toFixed(2)} (${m.deratingPct.toFixed(1)}%)</strong></div>
-          <div class="analysis-kpi"><span>3rd Harmonic Neutral I_N</span><strong>${m.iNeutralHarA.toFixed(0)} A (3 × I₃)</strong></div>
+          <div class="analysis-kpi"><span>52-CAP Parallel Resonance (f_r)</span><strong style="color:${m.capResonance.nearHarmonicHit?'#f87171':'#38bdf8'};">${m.capResonance.active ? (m.capResonance.detuned ? 'Detuned ~189 Hz' : `h=${m.capResonance.hRes} (${m.capResonance.fResHz} Hz)`) : '52-CAP OPEN'}</strong></div>
         `;
       } else if (pq.scenario === 'pf_cap') {
         controlsHtml = `
@@ -4783,21 +7130,78 @@ def get_js_app_core():
         `;
       }
 
+      const probeBarHtml = `
+        <div style="display:grid; grid-template-columns: 1.2fr 1.2fr auto; gap:8px; align-items:center; background:rgba(15,23,42,0.85); border:1px solid rgba(56,189,248,0.28); border-radius:8px; padding:8px 10px; margin-bottom:8px;">
+          <div>
+            <div style="font-size:9.5px; color:#38bdf8; font-weight:700; margin-bottom:2px;">CH.1 PRIMARY PQ PROBE NODE</div>
+            <select style="width:100%; background:#0f172a; color:#f8fafc; border:1px solid #334155; border-radius:5px; padding:4px 6px; font-size:11px;" onchange="updatePqLabControl('probeNodeA', this.value)">
+              ${PQ_PROBE_NODES.map(n => {
+                const nr = m.nodalResults[n.id];
+                return `<option value="${n.id}" ${pq.probeNodeA===n.id?'selected':''}>${n.short} (${nr.kvLabel}) — THD_V ${nr.energized ? nr.thdV.toFixed(2)+'%' : 'DE-EN'}</option>`;
+              }).join('')}
+            </select>
+          </div>
+          <div>
+            <div style="font-size:9.5px; color:#e879f9; font-weight:700; margin-bottom:2px;">CH.2 REFERENCE OVERLAY NODE</div>
+            <select style="width:100%; background:#0f172a; color:#f8fafc; border:1px solid #334155; border-radius:5px; padding:4px 6px; font-size:11px;" onchange="updatePqLabControl('probeNodeB', this.value)">
+              ${PQ_PROBE_NODES.map(n => {
+                const nr = m.nodalResults[n.id];
+                return `<option value="${n.id}" ${pq.probeNodeB===n.id?'selected':''}>${n.short} (${nr.kvLabel}) — THD_V ${nr.energized ? nr.thdV.toFixed(2)+'%' : 'DE-EN'}</option>`;
+              }).join('')}
+            </select>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:4px; align-items:flex-end;">
+            <label style="display:flex; align-items:center; gap:5px; font-size:10.5px; color:#f0abfc; cursor:pointer; font-weight:700;">
+              <input type="checkbox" ${pq.showOverlayB?'checked':''} onchange="updatePqLabControl('showOverlayB', this.checked)"> Overlay Ch.2 (Dashed)
+            </label>
+            <span style="font-size:9.5px; color:${m.activeNodeA.isDeltaHv?'#10b981':'#fbbf24'}; font-family:monospace;">
+              ${m.activeNodeA.isDeltaHv ? 'Δ-Trap: 0.0% HV Triplen Pass' : `13.8kV Neutral: ${m.nodalResults.bus_a_138.iNeutralHarA.toFixed(0)} A`}
+            </span>
+          </div>
+        </div>
+      `;
+
+      const nodalRowsHtml = m.nodalTable.map(nr => {
+        const isA = nr.id === pq.probeNodeA;
+        const isB = pq.showOverlayB && nr.id === pq.probeNodeB;
+        const rowBg = isA ? 'rgba(56,189,248,0.14)' : (isB ? 'rgba(232,121,249,0.10)' : 'transparent');
+        const badgeTag = isA ? '<span style="background:#0284c7;color:#fff;padding:1px 4px;border-radius:3px;font-size:8.5px;margin-right:4px;">CH1</span>' : (isB ? '<span style="background:#a21caf;color:#fff;padding:1px 4px;border-radius:3px;font-size:8.5px;margin-right:4px;">CH2</span>' : '');
+        const triplenTxt = nr.isDeltaHv
+          ? `<span style="color:#10b981;font-weight:700;">0.0% (Trapped in Δ)</span>`
+          : (nr.isHv ? `<span style="color:#94a3b8;">${nr.triplenLinePassPct.toFixed(1)}%</span>` : `<span style="color:#fbbf24;">${nr.triplenLinePassPct.toFixed(1)}%</span>`);
+        const neutralTxt = nr.isDeltaHv
+          ? `<span style="color:#10b981;">Δ-Circ ${m.iDeltaCircA.toFixed(1)} A</span>`
+          : (nr.isHv ? '<span style="color:#64748b;">3-Wire (0 A)</span>' : `<span style="color:${nr.iNeutralPctOfPhase>65?'#f87171':'#cbd5e1'};">${nr.iNeutralHarA.toFixed(0)} A (${nr.iNeutralPctOfPhase.toFixed(0)}%)</span>`);
+        return `
+          <tr style="background:${rowBg}; cursor:pointer; border-bottom:1px solid rgba(148,163,184,0.12);" onclick="updatePqLabControl('probeNodeA', '${nr.id}')">
+            <td style="padding:4px 6px; font-weight:600; color:#e2e8f0;">${badgeTag}${nr.label}</td>
+            <td style="padding:4px 6px; color:#94a3b8; font-family:monospace;">${nr.kvLabel}</td>
+            <td style="padding:4px 6px;"><span style="color:${nr.energized?'#10b981':'#ef4444'};font-weight:700;">${nr.energized?'LIVE':'OFF'}</span></td>
+            <td style="padding:4px 6px; font-family:monospace; color:${!nr.energized?'#64748b':(nr.ieee519Pass?'#10b981':'#f87171')}; font-weight:700;">${nr.thdV.toFixed(2)}%</td>
+            <td style="padding:4px 6px; font-family:monospace; color:#cbd5e1;">${nr.thdI.toFixed(2)}%</td>
+            <td style="padding:4px 6px; font-family:monospace;">${triplenTxt}</td>
+            <td style="padding:4px 6px; font-family:monospace;">${neutralTxt}</td>
+            <td style="padding:4px 6px;"><span class="duty-badge ${!nr.energized?'':(nr.ieee519Pass?'duty-pass':'duty-fail')}">${!nr.energized?'DE-EN':(nr.ieee519Pass?'PASS ≤5%':'FAIL >5%')}</span></td>
+          </tr>
+        `;
+      }).join('');
+
       body.innerHTML = `
+        ${probeBarHtml}
         <div class="pq-scenario-tabs">
           ${scenarios.map(sc => `<button class="pq-scen-btn ${pq.scenario===sc.id?'active':''}" onclick="selectPqScenario('${sc.id}')">${sc.label}</button>`).join('')}
         </div>
         <div class="pq-osc-grid">
           <div>
             <div class="pq-canvas-wrap">
-              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                <span style="font-size:10.5px; color:#38bdf8; font-weight:700;">LIVE 3-PHASE OSCILLOSCOPE — v_a (Red), v_b (Gold), v_c (Cyan) &amp; i_a (Green)</span>
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; gap:6px;">
+                <span style="font-size:10px; color:#38bdf8; font-weight:700;">OSCILLOSCOPE @ ${m.activeNodeA.short} — v_a, v_b, v_c &amp; i_a${pq.showOverlayB ? ` | <span style="color:#e879f9;">Ch.2: ${m.activeNodeB.short}</span>` : ''}</span>
                 <button class="btn" style="padding:2px 8px; font-size:9.5px;" onclick="updatePqLabControl('oscPaused', ${!pq.oscPaused})">${pq.oscPaused ? '▶ Resume' : '⏸ Freeze Trigger'}</button>
               </div>
               <canvas id="pq-waveform-canvas" width="520" height="200" style="width:100%; height:190px; display:block;"></canvas>
             </div>
             <div class="pq-canvas-wrap" style="margin-top:8px;">
-              <div style="font-size:10px; color:#a78bfa; font-weight:700; margin-bottom:3px;">HARMONIC FFT SPECTRUM (h = 1 to 13) &amp; IEEE 519 THRESHOLDS</div>
+              <div style="font-size:10px; color:#a78bfa; font-weight:700; margin-bottom:3px;">HARMONIC FFT SPECTRUM (h = 1..15) @ ${m.activeNodeA.short} ${m.capResonance.active ? `| 52-CAP f_r=${m.capResonance.fResHz}Hz` : ''}</div>
               <canvas id="pq-harmonic-canvas" width="520" height="105" style="width:100%; height:100px; display:block;"></canvas>
             </div>
           </div>
@@ -4812,6 +7216,29 @@ def get_js_app_core():
               </div>
               <div style="font-size:10.5px; color:#94a3b8; line-height:1.4;">${stdCheck.note}</div>
             </div>
+          </div>
+        </div>
+        <div style="margin-top:10px; background:rgba(15,23,42,0.75); border:1px solid rgba(56,189,248,0.22); border-radius:8px; padding:8px 10px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+            <span style="font-size:10.5px; font-weight:700; color:#38bdf8;">SYSTEM-WIDE 7-NODE HARMONIC PROPAGATION &amp; Δ-WINDING TRIPLEN ISOLATION MATRIX (Click Row to Probe)</span>
+            <span style="font-size:9.5px; color:#94a3b8;">IEEE 519-2022 PCC Limit: THD_V ≤ 5.0%</span>
+          </div>
+          <div style="overflow-x:auto;">
+            <table style="width:100%; border-collapse:collapse; font-size:10px; text-align:left;">
+              <thead>
+                <tr style="color:#94a3b8; border-bottom:1px solid rgba(148,163,184,0.25);">
+                  <th style="padding:4px 6px;">Nodal Bus / Asset</th>
+                  <th style="padding:4px 6px;">Voltage</th>
+                  <th style="padding:4px 6px;">State</th>
+                  <th style="padding:4px 6px;">THD_V</th>
+                  <th style="padding:4px 6px;">THD_I</th>
+                  <th style="padding:4px 6px;">Triplen Line (3,9,15)</th>
+                  <th style="padding:4px 6px;">Neutral I_N / Δ-Trap</th>
+                  <th style="padding:4px 6px;">IEEE 519</th>
+                </tr>
+              </thead>
+              <tbody>${nodalRowsHtml}</tbody>
+            </table>
           </div>
         </div>
       `;
@@ -4843,6 +7270,8 @@ def get_js_app_core():
       const midY = h / 2;
       const m = computePowerQualityMetrics();
       const pq = m.pq;
+      const nA = m.activeNodeA;
+      const nB = m.activeNodeB;
 
       ctx.fillStyle = '#020617';
       ctx.fillRect(0, 0, w, h);
@@ -4861,6 +7290,39 @@ def get_js_app_core():
 
       const ampV = h * 0.28;
       const cyclesShown = 4.0;
+      const evalSample = (nodeObj, tNorm, phShift, phGain) => {
+        const wt = tNorm * cyclesShown * Math.PI * 2 + pqPhaseOffset;
+        if (!nodeObj.energized) return 0;
+        let val = Math.sin(wt + phShift) * phGain;
+        if (pq.scenario === 'sag_swell') {
+          const cycPos = tNorm * cyclesShown;
+          const winEnd = Math.min(3.7, 0.7 + m.cyc * 0.12);
+          if (cycPos >= 0.7 && cycPos <= winEnd) val *= m.eventPu;
+        } else if (pq.scenario === 'harmonics') {
+          val += (nodeObj.h3 / 100) * 0.65 * Math.sin(3 * wt)
+            + (nodeObj.h5 / 100) * 0.55 * Math.sin(5 * (wt + phShift))
+            + (nodeObj.h7 / 100) * 0.45 * Math.sin(7 * (wt + phShift))
+            + (nodeObj.h9 / 100) * 0.35 * Math.sin(9 * wt)
+            + (nodeObj.h11 / 100) * 0.35 * Math.sin(11 * (wt + phShift))
+            + (nodeObj.h13 / 100) * 0.28 * Math.sin(13 * (wt + phShift))
+            + (nodeObj.h15 / 100) * 0.22 * Math.sin(15 * wt);
+        } else if (pq.scenario === 'transients' && phShift === 0) {
+          if (tNorm >= 0.32) {
+            const dt = tNorm - 0.32;
+            const ring = (m.isLightning ? 3.2 : 1.45) * Math.exp(-dt * 26) * Math.sin(dt * 190);
+            val += ring;
+            if (pq.saClampActive) {
+              const lim = m.isLightning ? 2.15 : 1.52;
+              val = Math.max(-lim, Math.min(lim, val));
+            }
+          }
+        } else if (pq.scenario === 'flicker') {
+          const mod = (m.dvOverV / 100) * 2.2 * Math.sin(wt * 0.133);
+          val *= (1 + mod);
+        }
+        return val;
+      };
+
       const phaseNames = [
         { shift: 0, color: '#f87171', gain: 1.0 },
         { shift: -2 * Math.PI / 3, color: '#fbbf24', gain: pq.scenario === 'unbalance' ? (1 - m.vuf * 0.015) : 1.0 },
@@ -4872,42 +7334,14 @@ def get_js_app_core():
         ctx.strokeStyle = ph.color;
         ctx.lineWidth = 1.8;
         for (let px = 0; px <= w; px += 2) {
-          const tNorm = px / w;
-          const wt = tNorm * cyclesShown * Math.PI * 2 + pqPhaseOffset;
-          let val = Math.sin(wt + ph.shift) * ph.gain;
-
-          if (pq.scenario === 'sag_swell') {
-            const cycPos = tNorm * cyclesShown;
-            const winEnd = Math.min(3.7, 0.7 + m.cyc * 0.12);
-            if (cycPos >= 0.7 && cycPos <= winEnd) val *= m.eventPu;
-          } else if (pq.scenario === 'harmonics') {
-            val += (m.h3 / 100) * 0.65 * Math.sin(3 * wt)
-              + (m.h5 / 100) * 0.55 * Math.sin(5 * (wt + ph.shift))
-              + (m.h7 / 100) * 0.45 * Math.sin(7 * (wt + ph.shift))
-              + (m.h11 / 100) * 0.35 * Math.sin(11 * (wt + ph.shift));
-          } else if (pq.scenario === 'transients' && ph.shift === 0) {
-            if (tNorm >= 0.32) {
-              const dt = tNorm - 0.32;
-              const ring = (m.isLightning ? 3.2 : 1.45) * Math.exp(-dt * 26) * Math.sin(dt * 190);
-              val += ring;
-              if (pq.saClampActive) {
-                const lim = m.isLightning ? 2.15 : 1.52;
-                val = Math.max(-lim, Math.min(lim, val));
-              }
-            }
-          } else if (pq.scenario === 'flicker') {
-            const mod = (m.dvOverV / 100) * 2.2 * Math.sin(wt * 0.133);
-            val *= (1 + mod);
-          }
-
-          const py = midY - val * ampV;
+          const py = midY - evalSample(nA, px / w, ph.shift, ph.gain) * ampV;
           if (px === 0) ctx.moveTo(px, py);
           else ctx.lineTo(px, py);
         }
         ctx.stroke();
       });
 
-      // Phase A Current trace i_a(t) showing PF lag or harmonic distortion
+      // Phase A Current trace i_a(t) on Ch.1 probe node
       ctx.beginPath();
       ctx.strokeStyle = '#10b981';
       ctx.lineWidth = 1.6;
@@ -4915,15 +7349,42 @@ def get_js_app_core():
       for (let px = 0; px <= w; px += 2) {
         const tNorm = px / w;
         const wt = tNorm * cyclesShown * Math.PI * 2 + pqPhaseOffset;
-        let cur = Math.sin(wt - phiRad) * 0.72;
-        if (pq.scenario === 'harmonics') {
-          cur += (m.h3 / 100) * Math.sin(3 * wt) + (m.h5 / 100) * Math.sin(5 * wt) + (m.h7 / 100) * Math.sin(7 * wt);
+        let cur = nA.energized ? Math.sin(wt - phiRad) * 0.72 : 0;
+        if (nA.energized && pq.scenario === 'harmonics') {
+          cur += (nA.h3 / 100) * Math.sin(3 * wt)
+            + (nA.h5 / 100) * Math.sin(5 * wt)
+            + (nA.h7 / 100) * Math.sin(7 * wt)
+            + (nA.h9 / 100) * 0.7 * Math.sin(9 * wt)
+            + (nA.h11 / 100) * 0.65 * Math.sin(11 * wt)
+            + (nA.h13 / 100) * 0.55 * Math.sin(13 * wt);
         }
         const py = midY - cur * ampV;
         if (px === 0) ctx.moveTo(px, py);
         else ctx.lineTo(px, py);
       }
       ctx.stroke();
+
+      // Channel 2 Reference Node Voltage Overlay (Phase A dashed Magenta)
+      if (pq.showOverlayB && nB) {
+        ctx.save();
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        ctx.strokeStyle = '#e879f9';
+        ctx.lineWidth = 2.0;
+        for (let px = 0; px <= w; px += 2) {
+          const py = midY - evalSample(nB, px / w, 0, 1.0) * ampV;
+          if (px === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      if (!nA.energized) {
+        ctx.fillStyle = '#f87171';
+        ctx.font = 'bold 12px monospace';
+        ctx.fillText('CH.1 DE-ENERGIZED (0.00 kV)', w / 2 - 96, midY - 10);
+      }
     }
 
     function drawPqHarmonicCanvas(metricsObj) {
@@ -4932,32 +7393,62 @@ def get_js_app_core():
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
       const m = metricsObj || computePowerQualityMetrics();
+      const nA = m.activeNodeA;
       const w = canvas.width, h = canvas.height;
       ctx.fillStyle = '#020617';
       ctx.fillRect(0, 0, w, h);
 
       const bars = [
-        { hOrder: 'h1', val: 100 },
-        { hOrder: 'h3', val: m.pq.scenario === 'harmonics' ? m.h3 : 1.8 },
-        { hOrder: 'h5', val: m.pq.scenario === 'harmonics' ? m.h5 : 2.9 },
-        { hOrder: 'h7', val: m.pq.scenario === 'harmonics' ? m.h7 : 1.9 },
-        { hOrder: 'h9', val: m.pq.scenario === 'harmonics' ? m.h3 * 0.25 : 0.6 },
-        { hOrder: 'h11', val: m.pq.scenario === 'harmonics' ? m.h11 : 1.1 },
-        { hOrder: 'h13', val: m.pq.scenario === 'harmonics' ? m.h11 * 0.7 : 0.8 }
+        { order: 1, hOrder: 'h1', val: nA.energized ? 100 : 0, triplen: false },
+        { order: 3, hOrder: 'h3', val: m.pq.scenario === 'harmonics' ? m.h3 : (nA.h3 * 0.25), triplen: true },
+        { order: 5, hOrder: 'h5', val: m.pq.scenario === 'harmonics' ? m.h5 : (nA.h5 * 0.35), triplen: false },
+        { order: 7, hOrder: 'h7', val: m.pq.scenario === 'harmonics' ? m.h7 : (nA.h7 * 0.30), triplen: false },
+        { order: 9, hOrder: 'h9', val: m.pq.scenario === 'harmonics' ? m.h9 : (nA.h9 * 0.25), triplen: true },
+        { order: 11, hOrder: 'h11', val: m.pq.scenario === 'harmonics' ? m.h11 : (nA.h11 * 0.25), triplen: false },
+        { order: 13, hOrder: 'h13', val: m.pq.scenario === 'harmonics' ? m.h13 : (nA.h13 * 0.25), triplen: false },
+        { order: 15, hOrder: 'h15', val: m.pq.scenario === 'harmonics' ? m.h15 : (nA.h15 * 0.20), triplen: true }
       ];
       const maxH = h - 22;
+
+      // IEEE 519 5% individual harmonic guide line
+      const yLim = maxH - (5 / 35) * (maxH - 8);
+      ctx.save();
+      ctx.setLineDash([4, 3]);
+      ctx.strokeStyle = 'rgba(248,113,113,0.55)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(10, yLim); ctx.lineTo(w - 10, yLim); ctx.stroke();
+      ctx.restore();
+      ctx.fillStyle = 'rgba(248,113,113,0.8)';
+      ctx.font = '9px monospace';
+      ctx.fillText('5% IEEE 519', w - 74, yLim - 2);
+
       bars.forEach((bItem, i) => {
-        const bw = 44;
-        const bx = 28 + i * 68;
-        const norm = i === 0 ? 0.92 : Math.min(0.9, bItem.val / 35);
-        const bh = Math.max(3, norm * (maxH - 8));
-        ctx.fillStyle = (i > 0 && bItem.val > 8) ? '#f87171' : (i === 0 ? '#38bdf8' : '#a78bfa');
+        const bw = 38;
+        const bx = 18 + i * 62;
+        const norm = i === 0 ? (nA.energized ? 0.90 : 0.0) : Math.min(0.90, bItem.val / 35);
+        const bh = Math.max(bItem.val > 0 ? 3 : 2, norm * (maxH - 8));
+        ctx.fillStyle = i === 0 ? '#38bdf8' : (bItem.triplen ? (nA.isDeltaHv ? '#10b981' : '#f59e0b') : (bItem.val > 8 ? '#f87171' : '#a78bfa'));
         ctx.fillRect(bx, maxH - bh, bw, bh);
         ctx.fillStyle = '#cbd5e1';
         ctx.font = '10px monospace';
-        ctx.fillText(bItem.hOrder, bx + 12, h - 6);
-        ctx.fillText(i === 0 ? '100%' : `${bItem.val.toFixed(1)}%`, bx + 6, Math.max(11, maxH - bh - 3));
+        ctx.fillText(bItem.hOrder, bx + 10, h - 6);
+        const lbl = i === 0 ? (nA.energized ? '100%' : '0%') : ((nA.isDeltaHv && bItem.triplen) ? '0%Δ' : `${bItem.val.toFixed(1)}%`);
+        ctx.fillText(lbl, bx + 3, Math.max(10, maxH - bh - 3));
       });
+
+      // 52-CAP parallel resonance frequency marker
+      if (m.capResonance && m.capResonance.active && !m.capResonance.detuned && m.capResonance.hRes >= 2 && m.capResonance.hRes <= 16) {
+        const resX = Math.min(w - 14, Math.max(70, 18 + ((m.capResonance.hRes - 1) / 2) * 62 + 19));
+        ctx.save();
+        ctx.setLineDash([3, 3]);
+        ctx.strokeStyle = '#fb923c';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(resX, 12); ctx.lineTo(resX, maxH); ctx.stroke();
+        ctx.restore();
+        ctx.fillStyle = '#fb923c';
+        ctx.font = 'bold 9px monospace';
+        ctx.fillText(`f_r=${m.capResonance.fResHz}Hz`, Math.max(70, Math.min(w - 88, resX - 28)), 10);
+      }
     }
 
     // 4TH-YEAR FIELD CHALLENGE MODAL LOGIC

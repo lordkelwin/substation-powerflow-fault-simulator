@@ -203,7 +203,7 @@ def get_js_data():
           { k: 'Front-of-Wave Protective Level (FOW)', v: '195.0 kV Peak' },
           { k: 'Basic Impulse Level (BIL) Protected', v: '350 kV (Protective Margin PR1 = 100%)' },
           { k: 'Temporary Overvoltage (TOV 10s)', v: '78.5 kV RMS' },
-          { k: 'Housing Material', v: 'Hydrophobic Silicone Rubber Polymer' },
+          { k: 'Housing Material', v: 'Dark Chocolate-Brown Wet-Process Glazed Porcelain' },
           { k: 'Energy Absorption Capability', v: '7.5 kJ / kV of MCOV' }
         ],
         failureModes: [
@@ -224,7 +224,7 @@ def get_js_data():
           { id: 'la-grading-ring', name: 'Electrostatic Corona & Voltage Grading Ring', tag: 'CORONA-RING', material: 'Seamless Spun Aluminum Toroid', role: 'Linearizes non-linear electrical field potential distribution across upper varistor disc stack.', vector: [0, 3.0, 0] },
           { id: 'la-zno-stack', name: 'Metal-Oxide Varistor (MOV) Zinc Oxide Disc Stack', tag: 'ZNO-DISCS', material: 'Sintered Zinc Oxide (ZnO) with Bismuth/Antimony Oxides', role: 'Acts as non-linear semiconductor: open-circuit at 60 Hz, transitioning to low resistance in nanoseconds during surges.', vector: [0, 0.5, 0] },
           { id: 'la-fiberglass-tube', name: 'Filament-Wound Fiberglass Reinforced Tube', tag: 'FRP-TUBE', material: 'High-Modulus Epoxy-Impregnated Fiberglass', role: 'Provides high mechanical cantilever strength (10 kN) against seismic and extreme wind forces.', vector: [0, 0.5, 1.8] },
-          { id: 'la-polymer-sheds', name: 'Hydrophobic Silicone Rubber Weather Sheds', tag: 'POLY-SHEDS', material: 'High-Temperature Vulcanized (HTV) Silicone Rubber', role: 'Prevents moisture and contamination flashover through superior water repellency (hydrophobicity).', vector: [0, 0.5, -1.8] },
+          { id: 'la-polymer-sheds', name: 'Wet-Process Dark Porcelain Weather Sheds & Flanges', tag: 'PORC-SHEDS', material: 'Dark Brown Glazed Wet-Process Electrical Porcelain + Metallic Intermediate Flanges', role: 'Provides high creepage distance (≥31 mm/kV), salt-fog contamination withstand, and superior UV/tracking immunity.', vector: [0, 0.5, -1.8] },
           { id: 'la-surge-counter', name: 'Ground Discharge Lead & Surge Counter', tag: 'SURGE-COUNT', material: 'Hermetic Spark-Gap Impactor & Analog Milliammeter', role: 'Counts cumulative surge discharges and monitors continuous phase-to-ground resistive leakage current.', vector: [0, -2.2, 0] }
         ]
       },
@@ -374,6 +374,822 @@ def get_js_data():
           { id: 'fdr-f2-breaker', name: 'Feeder 02 Isolation Assembly (89-F2A / 52-F2 / 89-F2B)', tag: 'FDR-02', material: '15 kV 1200 A Outdoor Vacuum Breaker + Twin Vertical Disconnects', role: 'Protects Industrial Park Radial Feeder 02 (19 MVA peak) with directional/overcurrent coordination and transfer switching readiness.', vector: [0.0, 0.8, 1.4] },
           { id: 'fdr-ct-arresters', name: 'Feeder Exit 1200/5A CTs & Riser Surge Arresters', tag: 'FDR-SA', material: 'Window Bushing CTs + 10 kV MCOV Polymer Distribution Arresters', role: 'Samples per-feeder phase & ground currents for SCADA/fault location while arresting incoming distribution line lightning surges.', vector: [1.1, 1.1, 0.0] },
           { id: 'fdr-takeoff-gantry', name: '13.8 kV Outgoing Takeoff H-Frame Gantry & ACSR Drops', tag: 'FDR-GAN', material: 'Galvanized Steel H-Frame + 15 kV Dead-End Polymer Insulators', role: 'Terminates dual outgoing 477 kcmil ACSR feeder circuits at 8.2 m height with shield wire termination to exit the switchyard.', vector: [1.8, 2.2, 0.0] }
+        ]
+      },
+
+      // --- UNBUNDLED SECONDARY & DISTRIBUTION APPARATUS ---
+      ngr_01: {
+        id: 'ngr_01',
+        name: 'Neutral Grounding Resistor (NGR-01)',
+        tag: 'NGR-10Ω / 51G',
+        ansiNumber: 'ANSI 51G / IEEE Std C57.32',
+        governingStandard: 'IEEE Std C57.32 / IEEE Std 142 (Green Book)',
+        overview: 'Low-resistance stainless-steel grid bank inserted between Transformer TR-01 neutral bushing (X0) and station ground grid, limiting single-line-to-ground (SLG) fault current on the 13.8 kV system to 797 A.',
+        specs: [
+          { k: 'Resistance Value (25°C)', v: '10.0 Ω ±5% (Stainless Steel Alloy)' },
+          { k: 'Let-Through SLG Fault Current', v: '796.7 A RMS @ 7.97 kV L-N (10-second duty)' },
+          { k: 'Peak Power Dissipation', v: '6.35 MW during SLG Fault (760 °C max temp rise)' },
+          { k: 'Neutral Sensing CT', v: '800 / 5 A Class C200 Window CT (ANSI 51G)' },
+          { k: 'Insulation Class / BIL', v: '15 kV Class / 110 kV BIL Post Standoff' }
+        ],
+        failureModes: [
+          { title: 'Open-Circuit Grid Crack (Ungrounded Conversion)', desc: 'Corrosion or weld fatigue opens the resistor path, turning the 13.8 kV bus ungrounded during SLG faults—causing sqrt(3) transient overvoltages and ANSI 51G blind spots.' },
+          { title: 'Thermal Overload Beyond 10s Duty', desc: 'Failure of upstream 52-LV to clear a persistent ground fault heats grids beyond 760°C, warping louver frames.' }
+        ],
+        checklist: [
+          'Verify 10.0 Ω DC resistance via DLRO micro-ohmmeter before energizing X0.',
+          'Check louvered stainless enclosure mesh for rodent nests or bird debris.',
+          'Confirm 51G Neutral CT polarity toward X0 and shorting block integrity.'
+        ],
+        subparts: [
+          { id: 'ngr-enclosure', name: 'Galvanized Louvered Enclosure & Roof Hood', tag: 'NGR-HSG', material: 'Perforated Galvanized Steel Sheet', role: 'Protects personnel from hot resistor elements (>600°C during faults) while venting convective heat.', vector: [0, 2.2, 0] },
+          { id: 'ngr-resistor-grid', name: 'AISI 304 Stainless Steel Punched Edgewound Grid Stack', tag: 'NGR-GRID', material: 'Low-TCR Chromium-Nickel Steel Alloy', role: 'Absorbs up to 63.5 MJ of SLG fault energy over 10 seconds with minimal resistance drift.', vector: [-1.4, 1.0, 0] },
+          { id: 'ngr-ct-bushing', name: '15 kV X0 Roof Entry Bushing & 800/5 A 51G Neutral CT', tag: 'NGR-CT', material: '110 kV BIL Porcelain + Toroidal CT', role: 'Brings insulated X0 lead into resistor top tap and feeds residual ground relay ANSI 51G.', vector: [0, 1.6, 1.4] },
+          { id: 'ngr-ground-pad', name: 'Earth Side 4/0 Cu Pigtail & Insulated Base', tag: 'NGR-GND', material: 'Tinned Copper Bar + Epoxied Standoffs', role: 'Returns limited 797 A fault current safely into the buried IEEE 80 copper ground mat.', vector: [0, -0.8, 0] }
+        ]
+      },
+
+      sa_lv: {
+        id: 'sa_lv',
+        name: '13.8 kV Secondary MOV Surge Arrester Bank (SA-13.8)',
+        tag: 'SA-LV',
+        ansiNumber: 'IEEE C62.11 Distribution / Intermediate',
+        governingStandard: 'IEEE Std C62.11 / IEC 60099-4',
+        overview: 'Three-phase gapless Zinc-Oxide station/intermediate arresters clamping secondary lightning surges transferred capacitively across TR-01 windings and capacitive switching transients.',
+        specs: [
+          { k: 'Duty Cycle Voltage (Ur)', v: '12.0 kV RMS (10.2 kV MCOV)' },
+          { k: '10 kA Discharge Clamping', v: '32.5 kV Peak (110 kV BIL margin > 3.3x)' },
+          { k: 'Housing', v: 'Dark Chocolate Porcelain Weather Sheds' }
+        ],
+        failureModes: [
+          { title: 'NGR Overvoltage TOV Damage', desc: 'Sustained ungrounded fault shifts phase-to-ground voltage to 13.8 kV (>10.2 kV MCOV), thermally stressing MOV blocks.' }
+        ],
+        checklist: [
+          'Check porcelain sheds for cracks and ground lead lug continuity to bus pedestal.',
+          'Verify resistive leakage below 100 µA via clamp-on surge counter.'
+        ],
+        subparts: [
+          { id: 'sal-terminal', name: 'Top Line Clamp & Grading Cap', tag: 'SAL-CAP', material: 'Bronze / Aluminum Die-Cast Clamp', role: 'Connects directly to 13.8 kV secondary rigid copper bus drop.', vector: [0, 1.8, 0] },
+          { id: 'sal-zno-core', name: '10.2 kV MCOV MOV Varistor Stack', tag: 'SAL-MOV', material: 'Sintered ZnO Disc Blocks', role: 'Conducts nanoseconds after lightning surge exceeds 25 kV peak.', vector: [1.3, 0.4, 0] },
+          { id: 'sal-sheds', name: 'Porcelain Weather Shed Housing', tag: 'SAL-PORC', material: 'Dark Brown Glazed Porcelain', role: 'Provides ≥ 430 mm external creepage and cantilever support.', vector: [-1.3, 0.4, 0] },
+          { id: 'sal-ground-lead', name: 'Ground Lead & Base Insulating Bracket', tag: 'SAL-GND', material: 'Insulated #2 Cu Lead', role: 'Routes surge energy directly into secondary steel rack ground bus.', vector: [0, -0.9, 0] }
+        ]
+      },
+
+      ctvt_lv: {
+        id: 'ctvt_lv',
+        name: '13.8 kV Bus Revenue Metering & Protection CT/VT (CTVT-LV)',
+        tag: 'CT/VT-13.8',
+        ansiNumber: 'IEEE C57.13 / ANSI 51/27/59/81',
+        governingStandard: 'IEEE Std C57.13 / ANSI C12.11',
+        overview: 'Dry-type butyl/cycloaliphatic epoxy instrument transformers sampling 13.8 kV bus voltage (120 V secondary) and main TR-01 secondary current (2000:5 A) for LV overcurrent, undervoltage, and OLTC AVR control.',
+        specs: [
+          { k: 'CT Ratio / Class', v: '2,000 / 5 A (0.3B1.8 Metering & C200 Relay)' },
+          { k: 'VT Ratio / Connection', v: '14,400 : 120 V (120:1, Grounded-Wye / Wye)' },
+          { k: 'Basic Impulse Level', v: '110 kV BIL (Outdoor Cycloaliphatic Resin)' }
+        ],
+        failureModes: [
+          { title: 'Ferroresonance on Broken-Delta VT', desc: 'Single-phasing or switching transients saturate VT core into sustained harmonic overvoltage unless 100 Ω damping resistor is fitted.' }
+        ],
+        checklist: [
+          'Verify CT shorting blocks inside marshalling box before meter testing.',
+          'Check VT primary current-limiting fuse continuity.'
+        ],
+        subparts: [
+          { id: 'lvct-tank', name: 'Cast Epoxy Dielectric Molding & Base', tag: 'LVCT-BODY', material: 'UV-Stabilized Cycloaliphatic Epoxy', role: 'Hermetically encapsulates toroidal CT and wound PT coils for outdoor service.', vector: [0, 1.4, 0] },
+          { id: 'lvct-core', name: 'Dual Silicon-Steel Metering & Relay Cores', tag: 'LVCT-CORE', material: 'Grain-Oriented Steel Toroids', role: 'Maintains 0.3% revenue accuracy while avoiding saturation at 18.4 kA fault.', vector: [1.4, 0.3, 0] },
+          { id: 'lvct-bushings', name: 'Primary H1/H2 Copper Tabs & Conduit Box', tag: 'LVCT-TERM', material: 'Silver-Plated NEMA Copper + Conduit', role: 'Routes 5 A and 120 V shielded twisted pairs to Control House Panel 2.', vector: [-1.4, 0.2, 0] }
+        ]
+      },
+
+      ds_lv: {
+        id: 'ds_lv',
+        name: '13.8 kV Secondary Main Disconnect Switches (89-LV-A / 89-LV-B)',
+        tag: 'DS-89LV',
+        ansiNumber: 'ANSI 89-LV',
+        governingStandard: 'IEEE Std C37.30',
+        overview: 'Twin 3-pole gang-operated vertical/hook-stick air-break isolators flanking 52-LV on line and bus sides to provide visual LOTO isolation.',
+        specs: [
+          { k: 'Rating / BIL', v: '15 kV, 2,000 A continuous, 110 kV BIL' },
+          { k: 'Momentary Withstand', v: '80 kA Crest' }
+        ],
+        failureModes: [
+          { title: 'Jaw Heating at 1,745 A Continuous', desc: 'Loose copper-finger springs elevate temperature >85°C under peak evening load.' }
+        ],
+        checklist: [
+          'Confirm 52-LV is open and locked out before pulling 89-LV.',
+          'Perform annual IR thermography across jaw contacts.'
+        ],
+        subparts: [
+          { id: 'lvds-frame', name: 'Galvanized Channel Base & Phase Turntables', tag: 'LVDS-FRM', material: 'Hot-Dip Galvanized Steel', role: 'Supports rigid phase insulators and interphase gang torsion shaft.', vector: [0, -0.8, 0] },
+          { id: 'lvds-insulators', name: '15 kV Post Insulator Stacks (TR-205)', tag: 'LVDS-INS', material: 'Wet-Process Brown Porcelain', role: 'Provides 110 kV BIL live-to-frame isolation.', vector: [0, 1.0, 1.3] },
+          { id: 'lvds-blades', name: 'Silver-Plated Dual Copper Truss Blades', tag: 'LVDS-BLD', material: 'High-Conductivity ETP Copper', role: 'Carries 2,000 A steady current with minimal contact drop.', vector: [0, 1.8, 0] },
+          { id: 'lvds-linkage', name: 'Interphase Pipe Linkage & Padlock Handle', tag: 'LVDS-LNK', material: 'Galvanized Pipe + Lockout Plate', role: 'Synchronizes A/B/C blades and accepts crew LOTO padlocks.', vector: [0, 0.3, -1.5] }
+        ]
+      },
+
+      cb_lv: {
+        id: 'cb_lv',
+        name: '13.8 kV Secondary Main Vacuum Circuit Breaker (52-LV)',
+        tag: '52-LV (50/51)',
+        ansiNumber: 'ANSI 52-LV (50/51/51G)',
+        governingStandard: 'IEEE Std C37.04 / C37.06 / IEC 62271-100',
+        overview: 'Outdoor dead-tank/porcelain-clad 15 kV Vacuum Circuit Breaker protecting the 13.8 kV main bus and coordinating downstream feeder relays against 18.4 kA secondary faults.',
+        specs: [
+          { k: 'Rated Voltage / Current', v: '15.0 kV Max / 2,000 A Continuous' },
+          { k: 'Interrupting Rating', v: '31.5 kA RMS Symmetrical (3-Cycle Clearing)' },
+          { k: 'Control / Trip Supply', v: '125 VDC Dual Shunt Trip Coils + Spring Charge' }
+        ],
+        failureModes: [
+          { title: 'Loss of Vacuum Integrity', desc: 'Microscopic bellows leak allows air inside bottle; Hi-Pot test (36 kV AC) detects compromised dielectric vacuum.' }
+        ],
+        checklist: [
+          'Perform 36 kV 1-minute AC bottle vacuum integrity Hi-Pot annually.',
+          'Measure contact resistance (<30 µΩ) & contact wear indicator gauge.'
+        ],
+        subparts: [
+          { id: 'lvcb-frame', name: 'Outdoor Skid Frame & Elevation Pedestal', tag: 'LVCB-FRM', material: 'Painted Galvanized Steel Frame', role: 'Elevates live vacuum interrupters and encloses spring operator linkage.', vector: [0, -1.1, 0] },
+          { id: 'lvcb-vacuum-bottles', name: 'Sealed Alumina-Ceramic Vacuum Interrupters (×3)', tag: 'LVCB-VAC', material: '10⁻⁶ Torr Vacuum + CuCr Contacts', role: 'Extinguishes 31.5 kA arcs at first current zero in <12 ms via metal vapor diffusion.', vector: [0, 1.8, 0] },
+          { id: 'lvcb-mech', name: '125 VDC Spring-Charge Operating Mechanism', tag: 'LVCB-MCH', material: 'High-Speed Cam & Trip Solenoids', role: 'Drives rapid 10 mm contact stroke and maintains 52a/52b auxiliary status.', vector: [1.4, 0.2, 0] },
+          { id: 'lvcb-bushings', name: '15 kV Roof Entrance Sheds & Line Pads', tag: 'LVCB-BSH', material: 'Cycloaliphatic Epoxy + Tin-Cu', role: 'Terminates incoming TR-01 bus drops and outgoing 13.8 kV main bus.', vector: [-1.4, 1.1, 0] }
+        ]
+      },
+
+      sst_100: {
+        id: 'sst_100',
+        name: '100 kVA Station Service Transformer (SST-100)',
+        tag: 'SST-100',
+        ansiNumber: '480Y/277V Station Auxiliary',
+        governingStandard: 'IEEE Std C57.12.20 / ANSI C57.12.00',
+        overview: 'Three-phase pole/pad oil-immersed step-down unit feeding Control House HVAC, battery chargers (125 VDC), TR-01 ONAF cooling fans, and yard security lighting directly from the 13.8 kV bus.',
+        specs: [
+          { k: 'Rated kVA / Ratio', v: '100 kVA, 13.8 kV Delta / 480Y-277 V' },
+          { k: 'Impedance / Protection', v: 'Z = 3.2% / 10E Expulsion Fuses' }
+        ],
+        failureModes: [
+          { title: 'Secondary Blackout → Battery Depletion', desc: 'If SST-100 trips off and charger stops, the 125 VDC battery sustains protection for only 8 hours.' }
+        ],
+        checklist: [
+          'Verify 480V transfer panel auto-switchover and oil level gauge.',
+          'Check silica dehydrator / relief valve.'
+        ],
+        subparts: [
+          { id: 'sst-tank', name: 'Mineral-Oil Steel Tank & Cooling Fins', tag: 'SST-TNK', material: 'Welded Mild Steel + Mineral Oil', role: 'Dissipates 1.8 kW full-load core and copper losses passively (ONAN).', vector: [0, 0.2, 0] },
+          { id: 'sst-hv-fuses', name: '13.8 kV Porcelain Bushings & Bay-O-Net Fuses', tag: 'SST-HV', material: 'Brown Porcelain + Current-Limiting Fuse', role: 'Isolates internal SST faults instantly without tripping 52-LV.', vector: [0, 1.8, 0] },
+          { id: 'sst-core-windings', name: '100 kVA Silicon Steel Core & Copper Coils', tag: 'SST-CORE', material: 'CRGO Steel + Enameled Copper', role: 'Steps 13.8 kV down cleanly to 480Y/277 V 3-phase station power.', vector: [1.3, 0.4, 0] },
+          { id: 'sst-lv-cabinet', name: '480V Secondary Terminal Compartment', tag: 'SST-LV', material: 'NEMA 3R Steel Cabinet + Conduit', role: 'Feeds Control House AC Panelboard & Battery Charger rectifiers.', vector: [-1.3, -0.3, 0] }
+        ]
+      },
+
+      cap_bank: {
+        id: 'cap_bank',
+        name: '3.6 MVAR Switched Shunt Capacitor Bank (52-CAP)',
+        tag: 'CAP-3.6MVAR',
+        ansiNumber: 'IEEE Std 18 / 52-CAP + 59N',
+        governingStandard: 'IEEE Std 18 / IEEE Std C37.99',
+        overview: 'Rack-mounted double-wye/grounded-wye all-film capacitor cans switched via a 600 A zero-crossing vacuum switch with iron-core inrush limiting reactors to support 13.8 kV voltage and correct PF to ≥0.96.',
+        specs: [
+          { k: 'Reactive Output', v: '3.6 MVAR @ 13.8 kV (150.6 A nominal)' },
+          { k: 'Unit Construction', v: '6x 200 kVAR All-Film Internall-Fused Cans per Phase' },
+          { k: 'Switching Control', v: '600 A Synchronous Zero-Cross Vacuum Switch (52-CAP)' }
+        ],
+        failureModes: [
+          { title: '5th/7th Harmonic Resonance Amplification', desc: 'Shunt capacitance may tune near harmonic system impedances; series reactors detune notch below 4.7th harmonic.' }
+        ],
+        checklist: [
+          'Wait minimum 5 minutes after opening 52-CAP so internal discharge resistors drain cans below 50 V!',
+          'Measure individual unit µF capacitance (±2% alert) and inspect cans for swelling.'
+        ],
+        subparts: [
+          { id: 'cap-rack', name: 'Elevated Galvanized Aluminum/Steel Insulator Rack', tag: 'CAP-RCK', material: 'Hot-Dip Steel + 15 kV Standoffs', role: 'Elevates energized capacitor racks safely above ground with neutral imbalance CT.', vector: [0, -0.9, 0] },
+          { id: 'cap-cans', name: 'All-Film Stainless Dielectric Capacitor Cans', tag: 'CAP-CANS', material: 'Polypropylene Film + Biodegradable Fluid', role: 'Supplies 3.6 MVAR leading reactive vars with <0.15 W/kVAR dielectric loss.', vector: [0, 1.5, 0] },
+          { id: 'cap-reactors', name: 'Current-Limiting Air/Iron Inrush Reactors', tag: 'CAP-IND', material: 'Epoxy-Cast Copper Coils', role: 'Limits high-frequency back-to-back switching inrush currents (<5 kA).', vector: [1.4, 0.8, 0] },
+          { id: 'cap-vcb', name: '15 kV 600 A Synchronous Capacitor Vacuum Switch (52-CAP)', tag: 'CAP-VCB', material: 'Transient-Free Restrike-Free VCB', role: 'Switches bank automatically on var/voltage schedule with minimal transient spikes.', vector: [-1.5, 0.6, 0] }
+        ]
+      },
+
+      cb_f1: {
+        id: 'cb_f1',
+        name: 'Feeder 01 Vacuum Breaker & Bay (52-F1 / 89-F1)',
+        tag: '52-F1 Bay',
+        ansiNumber: 'ANSI 52-F1 (50/51/51N/79)',
+        governingStandard: 'IEEE Std C37.230',
+        overview: 'Primary 13.8 kV feeder bay supplying the Commercial, Industrial & Residential distribution trunk via 1,200 A vacuum breaker, 4-shot ANSI 79 auto-reclosing, and flanked isolation disconnects.',
+        specs: [
+          { k: 'Breaker Rating', v: '15 kV, 1,200 A, 25 kA Symmetrical' },
+          { k: 'Reclosing Sequence', v: '79: Instantaneous + 0.5 s + 2.0 s + 15 s Lockout' }
+        ],
+        failureModes: [
+          { title: 'Sympathetic Tripping on Adjacent Feeder Fault', desc: 'Excessive voltage sag or poorly set 51N ground pickup causes unnecessary trip.' }
+        ],
+        checklist: [
+          'Verify ANSI 79 recloser enable selector switch position before live-line work.',
+          'Check 1200/5 A feeder CT secondary links.'
+        ],
+        subparts: [
+          { id: 'f1-frame', name: 'Galvanized Breaker Pedestal & Bypass Rack', tag: 'F1-FRM', material: 'Hot-Dip Structural Steel', role: 'Supports 52-F1 tank, disconnects, and bypass bus work.', vector: [0, -0.9, 0] },
+          { id: 'f1-vcb', name: '52-F1 1,200 A Vacuum Circuit Breaker Tank', tag: 'F1-VCB', material: '15 kV Vacuum Interrupter Unit', role: 'Clears persistent distribution faults in 3 cycles and auto-recloses per 79.', vector: [0, 1.5, 0] },
+          { id: 'f1-disconnects', name: '89-F1A / 89-F1B Flanking Air-Break Disconnects', tag: 'F1-DISC', material: '15 kV Copper-Blade Isolators', role: 'Visually isolates 52-F1 for maintenance while Feeder 02 remains live.', vector: [-1.3, 1.1, 0] },
+          { id: 'f1-relay-ct', name: '1200/5 A Feeder Sensing CTs & Ground Box', tag: 'F1-CT', material: 'Window CTs + Shielded Harness', role: 'Feeds 50/51/51N Feeder Relay on Panel 2 inside Control House.', vector: [1.3, 0.7, 0] }
+        ]
+      },
+
+      cb_f2: {
+        id: 'cb_f2',
+        name: 'Feeder 02 Vacuum Breaker & Bay (52-F2 / 89-F2)',
+        tag: '52-F2 Bay',
+        ansiNumber: 'ANSI 52-F2 (50/51/51N/79)',
+        governingStandard: 'IEEE Std C37.230',
+        overview: 'Parallel 13.8 kV distribution feeder bay serving heavy industrial backup and south feeder zone via 1,200 A vacuum circuit breaker and twin disconnect switches.',
+        specs: [
+          { k: 'Breaker Rating', v: '15 kV, 1,200 A, 25 kA Symmetrical' },
+          { k: 'Normal Load Share', v: '19.7 MVA (824 A @ 13.8 kV)' }
+        ],
+        failureModes: [
+          { title: 'Cold Load Pickup Trip', desc: 'Extended outage magnetizes distribution transformers and inrush motors up to 3x rated; cold-load timer raises pickup temporarily.' }
+        ],
+        checklist: [
+          'Check 89-F2A/B alignment and mechanical stop bolts.',
+          'Test local/remote trip & close control switches.'
+        ],
+        subparts: [
+          { id: 'f2-frame', name: 'Galvanized Breaker Pedestal & Support Channel', tag: 'F2-FRM', material: 'Hot-Dip Structural Steel', role: 'Mounts Feeder 02 switchgear and 15 kV riser insulators.', vector: [0, -0.9, 0] },
+          { id: 'f2-vcb', name: '52-F2 1,200 A Vacuum Circuit Breaker', tag: 'F2-VCB', material: '15 kV Vacuum Interrupter Unit', role: 'Protects Feeder 02 trunk with programmable TCC and ANSI 79 auto-reclosing.', vector: [0, 1.5, 0] },
+          { id: 'f2-disconnects', name: '89-F2A / 89-F2B Isolation Switches', tag: 'F2-DISC', material: '15 kV Copper-Blade Isolators', role: 'Provides double air-break isolation for LOTO clearance on Feeder 02.', vector: [-1.3, 1.1, 0] },
+          { id: 'f2-relay-ct', name: '1200/5 A Metering/Protection CTs', tag: 'F2-CT', material: 'Resin-Cast Window CTs', role: 'Supplies phase & residual currents to Feeder 02 protection relay.', vector: [1.3, 0.7, 0] }
+        ]
+      },
+
+      dist_recloser: {
+        id: 'dist_recloser',
+        name: 'Pole-Mounted Automatic Circuit Recloser (79-ACR1)',
+        tag: '79-ACR1',
+        ansiNumber: 'ANSI 79 / IEEE C37.60',
+        governingStandard: 'IEEE Std C37.60 / IEC 62271-111',
+        overview: 'Microprocessor-controlled 15.5 kV three-phase vacuum recloser installed on Pole #1 of Feeder 01 implementing a 2-Fast (Curve A) + 2-Slow (Curve B/C) Fuse-Saving coordination scheme.',
+        specs: [
+          { k: 'Voltage / Continuous Current', v: '15.5 kV Max / 560 A Continuous (110 kV BIL)' },
+          { k: 'Interrupting Capacity', v: '12.5 kA RMS Symmetrical (Vacuum in Solid Dielectric)' },
+          { k: 'Reclosing Sequence', v: '2 Fast Shots (Curve A, 0.5 s dead) + 2 Slow (Curve B/C, 2.0 s dead) -> Lockout' },
+          { k: 'Transient Clearing Share', v: 'Clears ~80% of temporary lightning/tree faults before 100K lateral fuse melts' }
+        ],
+        failureModes: [
+          { title: 'Loss of Fast Curve Enable (Switch in Slow-Only)', desc: 'Disabling fast curve allows temporary lightning faults to blow lateral fuses unnecessarily, worsening utility SAIDI/SAIFI.' }
+        ],
+        checklist: [
+          'Verify Form 6 / SEL-651R controller AC PT supply and 24V sealed battery backup.',
+          'Confirm yellow manual-trip/non-reclose hookstick handle hangs straight down in AUTO mode.'
+        ],
+        subparts: [
+          { id: 'rec-tank', name: 'Solid Epoxy / Stainless Top Manifold Tank', tag: 'REC-TNK', material: 'Hydrophobic Cycloaliphatic Epoxy & 304 SS', role: 'Houses magnetic actuator coils and internal toroidal CTs in maintenance-free housing.', vector: [0, 0.4, 0] },
+          { id: 'rec-interrupters', name: '3-Phase Embedded Vacuum Interrupter Modules', tag: 'REC-VAC', material: 'Alumina Ceramic + CuCr Contacts', role: 'Interrupts 12.5 kA fault currents rapidly under magnetic actuator drive (<15 ms).', vector: [0, 1.5, 0] },
+          { id: 'rec-bushings', name: '15.5 kV Silicone Polymer Creepage Bushings', tag: 'REC-BSH', material: 'HTV Silicone Polymer + Bird Guards', role: 'Provides wildlife-safe overhead connections and 110 kV BIL insulation.', vector: [1.3, 1.1, 0] },
+          { id: 'rec-control-box', name: 'Pole-Base Digital Recloser Control Cabinet', tag: 'REC-CTL', material: 'NEMA 4X Aluminum + SEL/Form-6 Relay', role: 'Tracks fault count, executes Curve A/B/C timing, and communicates SCADA FLISR status.', vector: [-1.4, -1.2, 0] }
+        ]
+      },
+
+      dist_sectionalizer: {
+        id: 'dist_sectionalizer',
+        name: 'Automatic Line Sectionalizer (34-SECT)',
+        tag: '34-SECT',
+        ansiNumber: 'ANSI 34 / IEEE C37.63',
+        governingStandard: 'IEEE Std C37.63',
+        overview: 'Fault-counting sectionalizing switch installed downstream of Recloser 79-ACR1. It NEVER interrupts fault current itself; instead it counts upstream recloser fault-zero open pulses and drops open ONLY during the recloser zero-current dead time (Count = 2).',
+        specs: [
+          { k: 'Voltage / Continuous Current', v: '15.5 kV, 400 A Continuous' },
+          { k: 'Interrupting Rating', v: '0 A Fault Interrupting (Opens Strictly Under Zero-Current Dead Time!)' },
+          { k: 'Actuation Logic', v: 'Armed above 160 A fault -> Opens during Recloser #2 Dead-Time (<0.5 s)' },
+          { k: 'Coordination Benefit', v: 'Needs NO time-current margin (CTI = 0 s) because it counts shots instead of racing curves' }
+        ],
+        failureModes: [
+          { title: 'Wrong Count Setting vs Upstream Recloser', desc: 'Setting Sectionalizer count ≥ Recloser lockout shots causes upstream lockout before sectionalizer can isolate the faulted branch.' }
+        ],
+        checklist: [
+          'Verify mechanical/electronic shot count set strictly ≤ (Upstream Recloser Lockout - 1).',
+          'Check manual drop-out isolator links after dead-time operation.'
+        ],
+        subparts: [
+          { id: 'sect-frame', name: 'Hot-Dip Steel Crossarm Mounting Frame', tag: 'SECT-FRM', material: 'Galvanized Channel Assembly', role: 'Spans 3-phase pole crossarm and anchors torsional trip shafts.', vector: [0, -0.7, 0] },
+          { id: 'sect-insulators', name: '15.5 kV Silicone Suspension/Post Standoffs', tag: 'SECT-INS', material: 'Silicone Rubber Over FRP Rod', role: 'Supports switched contact hinge blades at 110 kV BIL.', vector: [1.2, 0.8, 0] },
+          { id: 'sect-actuators', name: 'Latch Release Solenoid & Dropout Drop-Blades', tag: 'SECT-ACT', material: 'Spring-Loaded Copper Dropout Contacts', role: 'Releases latch precisely during upstream recloser open interval to clear dead branch.', vector: [0, 1.5, 0] },
+          { id: 'sect-counter', name: 'Current-Sensing Toroid & Pulse Count Register', tag: 'SECT-CNT', material: 'Self-Powered CT + Electronic Logic', role: 'Detects fault pickup (>160 A) followed by current-zero dead-time transition.', vector: [-1.3, -0.3, 0] }
+        ]
+      },
+
+      dist_fuse_cutout: {
+        id: 'dist_fuse_cutout',
+        name: '15 kV Expulsion Fuse Cutout (100K Lateral Tap)',
+        tag: 'FUSE-100K',
+        ansiNumber: 'IEEE C37.41 / 100K',
+        governingStandard: 'IEEE Std C37.41 / C37.42',
+        overview: 'Lateral branch expulsion cutout fitted with a 100K tin fuse link, coordinated in Fuse-Saving mode with upstream Recloser 79-ACR1 so transient faults clear on Curve A while permanent lateral faults blow and visibly drop open the fiberglass fuse tube at 180 deg.',
+        specs: [
+          { k: 'Voltage / Frame Current', v: '15 kV Class / 100 A Frame (100K Tin Link)' },
+          { k: 'Interrupting Rating', v: '10 kA Asymmetrical RMS' },
+          { k: 'Coordination Window', v: 'Coordinated strictly between 79-ACR1 Curve A (Fast) and Curve B (Slow)' }
+        ],
+        failureModes: [
+          { title: 'Nuisance Fuse Blowing on Lightning Transient', desc: 'Occurs if upstream 79-ACR1 fast shot is disabled or improperly sized.' }
+        ],
+        checklist: [
+          'Verify arc-chute bore inside fiberglass tube is unobstructed before re-fusing.',
+          'Always pull/close with insulated telescopic hot-stick and loadbreak tool.'
+        ],
+        subparts: [
+          { id: 'fuse-bracket', name: 'NEMA Crossarm Steel Mounting Bracket', tag: 'FUSE-BRK', material: 'Galvanized Steel Hook Bracket', role: 'Bolts directly to wooden/concrete utility crossarm.', vector: [0, -0.7, 0] },
+          { id: 'fuse-insulator', name: '15 kV Zig-Zag Silicone C-Shaped Insulator', tag: 'FUSE-INS', material: 'Shedded Silicone / Porcelain C-Frame', role: 'Holds top bronze contact hood and bottom trunnion hinge.', vector: [-1.2, 0.4, 0] },
+          { id: 'fuse-tube', name: 'Bone-Fiber Lined Fiberglass Arc-Quench Fuseholder', tag: 'FUSE-TUBE', material: 'Vulcanized Bone Fiber + Epoxiglass', role: 'Generates high-pressure non-conductive gas blast during melt to quench fault arc and drops 180° visually open.', vector: [1.3, 0.9, 0] },
+          { id: 'fuse-link', name: '100K Tin Fuse Button & Flexible Copper Leader Tail', tag: 'FUSE-LNK', material: 'Eutectic Tin Element + Braided Cu Tail', role: 'Melts along IEEE K-speed curve on persistent overcurrent to unlatch tube.', vector: [0.4, -1.2, 0] }
+        ]
+      },
+
+      dist_arrester: {
+        id: 'dist_arrester',
+        name: '10 kV Heavy-Duty Distribution Surge Arrester (SA-DIST)',
+        tag: 'SA-10kV',
+        ansiNumber: 'IEEE C62.11 Distribution',
+        governingStandard: 'IEEE Std C62.11',
+        overview: 'Compact dark-porcelain/polymer distribution MOV arrester safeguarding overhead pole transformers, reclosers, and lateral risers from induced lightning surges, equipped with an explosive ground-lead disconnector cartridge.',
+        specs: [
+          { k: 'Rating / MCOV', v: '10 kV Duty Cycle / 8.4 kV MCOV (69/13.8kV Grounded Wye)' },
+          { k: 'Ground Isolator', v: 'Explosive Cartridge Disconnector flags blown arrester visually' }
+        ],
+        failureModes: [
+          { title: 'Failed Arrester Ground Fault Lockout', desc: 'If cartridge disconnector fails to fire, a shorted MOV block holds a permanent SLG fault on Feeder 01.' }
+        ],
+        checklist: [
+          'Scan pole crossarm visually from road for dangling white ground isolator flag.',
+          'Confirm bird guard wildlife cap is snapped over hot top stud.'
+        ],
+        subparts: [
+          { id: 'da-cap', name: 'Insulated Wildlife Bird-Guard Cap & Stud', tag: 'DA-CAP', material: 'UV Polycarbonate + Bronze Clamp', role: 'Prevents raptor/squirrel phase-to-crossarm flashovers.', vector: [0, 1.5, 0] },
+          { id: 'da-zno', name: '8.4 kV MCOV Zinc-Oxide Varistor Pellets', tag: 'DA-MOV', material: 'Pressed MOV Disc Stack', role: 'Diverts up to 65 kA high-current 4/10 µs nearby lightning strikes.', vector: [1.1, 0.4, 0] },
+          { id: 'da-sheds', name: 'Distribution Weather Shed Housing', tag: 'DA-SHED', material: 'Dark Glazed Porcelain / Polymer', role: 'Encapsulates ZnO stack across 15 kV BIL clearance.', vector: [-1.1, 0.4, 0] },
+          { id: 'da-isolator', name: 'Explosive Ground-Lead Disconnector Cartridge', tag: 'DA-DISC', material: 'Arc-Triggered Powder Capsule', role: 'Cleanly severs ground tail during internal MOV failure so recloser 79 can re-energize line.', vector: [0, -1.0, 0] }
+        ]
+      },
+
+      substation_b: {
+        id: 'substation_b',
+        name: 'Neighboring Tie Substation B & Loop Tie Recloser (79-TIE)',
+        tag: 'SUB-B / 79-TIE',
+        ansiNumber: 'FLISR N-1 Tie Source',
+        governingStandard: 'IEEE Std 1547 / SCADA FLISR Loop Scheme',
+        overview: 'Adjacent 69/13.8 kV distribution substation located at the eastern boundary of Feeder 01, interconnected via Normally-Open Automated Loop Tie Recloser 79-TIE. Executes automated Fault Location, Isolation, and Service Restoration (FLISR) to back-feed un-faulted downstream Commercial & Industrial loads.',
+        specs: [
+          { k: 'Substation B Capacity', v: '41.7 MVA, 69 / 13.8 kV Tie Source' },
+          { k: 'Normal Tie State', v: '79-TIE NORMALLY OPEN (Prevents Parallel Circulating Current)' },
+          { k: 'FLISR Auto-Transfer Time', v: '< 4.2 seconds (Isolate 79-ACR1/34-SECT -> Close 79-TIE)' },
+          { k: 'Customers Served Downstream', v: 'Industrial Plant (1500 kVA) + Commercial Center (750 kVA)' }
+        ],
+        failureModes: [
+          { title: 'Out-of-Phase Sync Closure', desc: 'Tie recloser sync-check relay (ANSI 25) must confirm delta-V < 5% and delta-angle < 15 deg or dead-bus on Feeder 01 before closing.' }
+        ],
+        checklist: [
+          'Verify ANSI 25 Synchrocheck & Dead-Line-One-Side logic enabled before FLISR transfer.',
+          'Check SCADA DNP3 comms heartbeats between Main Substation and Substation B RTUs.'
+        ],
+        subparts: [
+          { id: 'subb-xfmr', name: 'Substation B 69/13.8 kV Tie Power Transformer', tag: 'SUBB-TX', material: '41.7 MVA Mineral-Oil Tie Unit', role: 'Maintains independent 13.8 kV (1.00 pu) voltage source for N-1 loop transfer.', vector: [1.8, 0.8, 0] },
+          { id: 'subb-tie-recloser', name: 'Normally-Open Automated Loop Tie Recloser (79-TIE)', tag: '79-TIE', material: '15.5 kV 630 A Motorized Vacuum Recloser', role: 'Automatically closes upon SCADA FLISR command to back-feed healthy eastern load sections.', vector: [-1.8, 0.5, 0] },
+          { id: 'subb-bus-rack', name: 'Substation B 13.8 kV Dead-End Tie Gantry', tag: 'SUBB-BUS', material: 'Galvanized Steel H-Frame', role: 'Receives the 13.8 kV open-tie overhead span from Feeder 01 east boundary.', vector: [0, 1.8, 0] },
+          { id: 'subb-rtu', name: 'Substation B DNP3 SCADA RTU & Sync-Check Panel', tag: 'SUBB-RTU', material: 'NEMA Control Enclosure + ANSI 25', role: 'Coordinates phase verification and directional fault isolation with Main Control House.', vector: [0, -1.0, 1.5] }
+        ]
+      },
+
+      dt_res_50: {
+        id: 'dt_res_50',
+        name: 'Residential Pole-Mounted Distribution Transformer (DT-RES-50)',
+        tag: 'DT-RES-50 (50 kVA)',
+        ansiNumber: 'IEEE C57.12.20 Overhead 1φ / ANSI 46',
+        governingStandard: 'IEEE Std C57.12.20 / NESC / PEC Part 2',
+        overview: '50 kVA 7,967Y/13.8 kV-to-240/120 V single-phase pole-mounted overhead distribution transformer feeding the residential lateral. Complete with ANSI 70 steel tank, radiator cooling fins, glazed porcelain HV/LV bushings with wildlife guard, expulsion fuse cutout (ANSI 46), hot-line tap clamp, SA-10kV surge arrester, and driven ground rod.',
+        specs: [
+          { k: 'Rated kVA & Voltage', v: '50 kVA Continuous (65°C Rise) | 7.97 kV L-N -> 240/120 V 3-Wire' },
+          { k: 'Primary / Secondary FLA', v: 'I1 = 6.28 A @ 7.97 kV | I2 = 208.3 A @ 240 V (2.1% Z)' },
+          { k: 'Primary Cutout & Link', v: '15 kV 100 A Expulsion Cutout (ANSI 46) w/ 10T (1.6x I1) Fuse Link' },
+          { k: 'Surge Protection & Ground', v: '10 kV / 8.4 kV MCOV Tank-Boss MOV Arrester -> 5/8" x 8 ft Cu Rod' }
+        ],
+        failureModes: [
+          { title: 'Bird / Squirrel Flashover at H1 Bushing', desc: 'Mitigated by cover-mounted polymer wildlife guard over glazed porcelain H1/H2 bushings and insulated primary riser lead.' },
+          { title: 'Neutral / Case Float Under Fault', desc: 'Secondary center-tap X2 is solidly bonded to tank ground strap and driven copper-clad pole butt rod alongside arrester ground.' }
+        ],
+        checklist: [
+          'Verify 10T/10K fuse link seated cleanly in cutout toggle trunnion and hot-line clamp tight on 13.8 kV stirrup.',
+          'Confirm arrester ground-lead disconnector intact and common bonding between arrester, tank lug, and X2 neutral.'
+        ],
+        subparts: [
+          { id: 'dt-tank-fins', name: 'ANSI 70 Rolled-Steel Tank, Radiator Fins & Mounting Brackets', tag: 'TANK', material: ' Mild Steel ANSI 70 Gray + Galvanized Lug Brackets', role: 'Contains dielectric mineral oil, dissipates core/I²R heat, and bolts onto wood distribution pole.', vector: [-0.9, 0.0, 0.0] },
+          { id: 'dt-core-coil', name: 'Silicon-Steel Core, HV/LV Windings & Tap Changer', tag: 'CORE', material: 'CRGO Steel + Formvar Copper/Al Windings', role: 'Steps 7,967 V L-N down to center-tapped 240/120 V split-phase via +/-2.5% de-energized tap changer.', vector: [0.0, 1.35, 0.0] },
+          { id: 'dt-hv-bushing', name: 'Glazed Brown Porcelain H1/H2 Bushing & Wildlife Guard', tag: 'H1/H2', material: 'Wet-Process Glazed Porcelain + UV Polymer Guard', role: 'Maintains 95 kV BIL clearance from tank cover while shielding live terminal from raptor/squirrel contact.', vector: [0.0, 2.1, -0.45] },
+          { id: 'dt-lv-bushings', name: 'Side-Wall X1/X2/X3 Secondary Bushings & Triplex Drops', tag: 'X1-X3', material: 'Porcelain Spade Studs + #2/0 ACSR Triplex', role: 'Feeds 240/120 V split-phase power out to adjacent residential customer weatherhead service entrances.', vector: [0.95, 0.25, 0.85] },
+          { id: 'dt-fuse-cutout', name: 'Primary Expulsion Fuse Cutout (ANSI 46) & Hot-Line Clamp', tag: '46-FUSE', material: '15 kV Silicone C-Frame + Bronze Tap Clamp', role: 'Isolates internal transformer faults with visible dropout tube and allows hot-stick live tapping via stirrup.', vector: [-0.85, 1.55, 0.65] },
+          { id: 'dt-arrester-ground', name: 'Distribution Surge Arrester (SA-10kV) & Driven Ground Rod', tag: 'SA-GND', material: '8.4 kV MCOV ZnO Discs + 5/8"x8ft Cu-Clad Rod', role: 'Diverts lightning surges cleanly into earth while isolating failed arresters via explosive disconnector.', vector: [0.85, 0.95, -0.75] }
+        ]
+      },
+
+      dt_com_750: {
+        id: 'dt_com_750',
+        name: 'Commercial Business District (CBD) 750 kVA Pad-Mounted Transformer & ATS (DT-COM-750)',
+        tag: 'DT-COM-750 (CBD · 750 kVA)',
+        ansiNumber: 'IEEE C57.12.34 Pad / Hospital ATS & Office Towers',
+        governingStandard: 'IEEE Std C57.12.34 / NFPA 110 / NEC Art. 450 & 700',
+        overview: '750 kVA three-phase pad-mounted distribution transformer (13.8 kV Delta primary to 480Y/277 V secondary) serving the Commercial Business District: multi-story Glass Curtain-Wall Office Tower, Shopping Mall / Supermarket Complex, and Regional Hospital (equipped with emergency diesel backup generator & Automatic Transfer Switch ATS).',
+        specs: [
+          { k: 'Rated kVA & CBD Loads', v: '750 kVA Continuous | Office Tower + Mall + Hospital + LED Blvd Lighting' },
+          { k: 'Primary / Secondary FLA', v: 'I1 = 31.4 A @ 13.8 kV | I2 = 902.1 A @ 480 V (5.3% Z)' },
+          { k: 'Riser Fuses & Hospital ATS', v: '3× 50T/65K Riser Fuses + NFPA 110 10-sec Emergency Diesel Generator ATS' },
+          { k: 'Lightning & Grounding', v: '3× SA-10kV (8.4 kV MCOV) Arresters + Dual Driven 5/8"x8ft Ground Rods' }
+        ],
+        failureModes: [
+          { title: 'Single-Phasing Motor Damage & Hospital Transfer', desc: 'Expulsion fuse blowout on one phase triggers hospital under-voltage relay (27), starting the backup diesel generator and shifting critical life-safety loads via ATS.' }
+        ],
+        checklist: [
+          'Verify 3-phase fuse links matched to 50T/65K coordination table above 480 V main breaker.',
+          'Confirm hospital emergency generator fuel level and ATS transfer test readiness.',
+          'Check cooling fin louvers and secondary X0 neutral ground grid bonding.'
+        ],
+        subparts: [
+          { id: 'dt-tank-fins', name: '750 kVA Heavy-Gauge Tank, Cooling Radiators & Mounting Skid', tag: 'TANK', material: 'Pad-Green Coated Steel (Munsell 7GY)', role: 'Encapsulates 3-phase core-coil bank with welded vertical radiator fin banks and pressure relief device.', vector: [-0.9, 0.0, 0.0] },
+          { id: 'dt-core-coil', name: '3-Phase 3-Leg Core, Coils & 5-Tap De-Energized Changer', tag: 'CORE', material: 'Silicon Steel + Copper Foil LV Windings', role: 'Transforms 13.8 kV three-phase down to 480Y/277 V commercial building distribution.', vector: [0.0, 1.35, 0.0] },
+          { id: 'dt-hv-bushing', name: '3-Phase Porcelain Primary Bushings (H1-H2-H3) & Wildlife Guards', tag: 'H1-H3', material: 'Glazed Brown Porcelain (95 kV BIL)', role: 'Receives 13.8 kV primary riser cables feeding the Commercial District.', vector: [0.0, 2.1, -0.45] },
+          { id: 'dt-lv-bushings', name: 'Secondary 480Y/277 V Spade Bushings (X0-X1-X2-X3) & Drops', tag: 'X0-X3', material: 'Tin-Plated Copper Spades + Parallel 500 kcmil', role: 'Delivers 902 A secondary service to Office Tower, Mall, and Hospital ATS.', vector: [0.95, 0.25, 0.85] },
+          { id: 'dt-fuse-cutout', name: '3-Phase Expulsion Fuse Cutouts & Bay-O-Net Loadbreak Fuses', tag: '46-3PH', material: '15 kV Cutout Trio + Dual-Sensing Bay-O-Net', role: 'Protects commercial riser bank while maintaining selective coordination with 34-SECT.', vector: [-0.85, 1.55, 0.65] },
+          { id: 'dt-arrester-ground', name: '3× SA-10kV Arresters & Common Ground Rod Loop', tag: 'SA-3PH', material: '8.4 kV MCOV MOV + 4/0 Cu Ground Lead', role: 'Clamps switching and lightning transients before HV bushings.', vector: [0.85, 0.95, -0.75] }
+        ]
+      },
+
+      dt_ind_1500: {
+        id: 'dt_ind_1500',
+        name: 'Dedicated HV Customer Industrial Substation (69 / 138 kV · 20–30 MVA)',
+        tag: 'CUST-IND-HV (52-CUST · 25 MVA)',
+        ansiNumber: 'IEEE C57.12.10 Customer-Owned HV Step-Down Station',
+        governingStandard: 'IEEE Std C57.12.10 / IEEE 141 / IEEE 242 Buff Book',
+        overview: 'Customer-owned high-voltage industrial substation isolated on the North Industrial ROW corridor and supplied directly at 69 kV (or 138 kV on EHV tiers) via dedicated sub-transmission bay 52-IND—never from the 13.8 kV public city feeders. Steps bulk sub-transmission down via a 25 MVA power transformer (52-CUST) to 4.16 kV / 13.8 kV plant switchgear feeding electric-arc steel furnaces, rolling mills, and cooling towers.',
+        specs: [
+          { k: 'Dedicated HV Supply', v: '69 kV (Tiers 1–2) or 138 kV (Tiers 3–4) Sub-Transmission Line off 52-IND' },
+          { k: 'Customer Power TX', v: '25 MVA (20/26.7/33 MVA) ONAN/ONAF Dyn11 | 69→4.16 kV or 138→13.8 kV (Z = 8.5%)' },
+          { k: 'HV / Plant FLA', v: 'I_HV = 209.2 A @ 69 kV (104.6 A @ 138 kV) | I_LV = 3,470 A @ 4.16 kV' },
+          { k: 'Protection & Perimeter', v: 'Dedicated 52-CUST HV Breaker + 87T Diff + 3.0 m Precast Concrete Security Wall' }
+        ],
+        failureModes: [
+          { title: 'Arc-Furnace Flicker & Harmonic Injection', desc: 'Large industrial EAF / rolling mill VFD loads draw high reactive swings; dedicated 69/138 kV feeder 52-IND completely decouples voltage flicker from city 13.8 kV residential/hospital buses!' }
+        ],
+        checklist: [
+          'Confirm 52-IND substation bay and 52-CUST customer main breaker maintain selective 21/51-IND coordination.',
+          'Inspect 69/138 kV steel lattice sub-transmission corridor clearances and customer precast security wall interlocks.'
+        ],
+        subparts: [
+          { id: 'dt-tank-fins', name: 'Customer 25 MVA Steel Tank, Oil Conservator & ONAF Radiator Banks', tag: 'TANK', material: 'ANSI 70 Welded Steel + Forced-Air Cooling Banks', role: 'Dissipates continuous heavy steel-mill and motor-starting thermal duty.', vector: [-0.95, 0.0, 0.0] },
+          { id: 'dt-core-coil', name: '25 MVA Grain-Oriented Core, LTC Winding & Tap Changer', tag: 'CORE/LTC', material: 'CRGO Silicon Core + Copper Helical Windings', role: 'Steps dedicated 69/138 kV sub-transmission down to 4.16/13.8 kV plant utilization bus.', vector: [0.0, 1.45, 0.0] },
+          { id: 'dt-hv-bushing', name: '69 / 138 kV Condenser Porcelain Bushings (H1/H2/H3) & Corona Rings', tag: 'HV-BUSH', material: '350/650 kV BIL Oil-Impregnated Condenser Bushings', role: 'Terminates incoming 69/138 kV steel-tower sub-transmission leads cleanly into tank.', vector: [0.0, 2.35, -0.5] },
+          { id: 'dt-lv-bushings', name: '3,470 A Enclosed Bus-Duct Throat & 4.16/13.8 kV Switchgear Feed', tag: 'BUS-DUCT', material: 'Ventilated Copper Busway into Metal-Clad Switchgear', role: 'Delivers bulk industrial power directly into 4.16 kV plant switchgear lineup.', vector: [1.05, 0.25, 0.85] },
+          { id: 'dt-fuse-cutout', name: '52-CUST Customer Main SF6 Breaker & 89-CUST Motor Disconnect', tag: '52-CUST', material: '69/138 kV Live-Tank SF6 Breaker + 1200 A Knife Switch', role: 'Provides local customer fault clearing and visible air-gap isolation off the utility HV line.', vector: [-0.95, 1.65, 0.7] },
+          { id: 'dt-arrester-ground', name: 'Station-Class HV MOV Arresters & Customer IEEE 80 Ground Grid', tag: 'SA-GND', material: '60/120 kV Polymer MOV Arresters + 4/0 Cu Mesh', role: 'Protects customer 25 MVA winding BIL against switching and sub-transmission lightning surges.', vector: [0.9, 1.0, -0.8] }
+        ]
+      },
+
+      urd_riser_pole: {
+        id: 'urd_riser_pole',
+        name: 'URD Subdivision Overhead-to-Underground Transition (Dip / Riser) Pole',
+        tag: 'URD RISER POLE (15 kV)',
+        ansiNumber: 'IEEE Std 48 / NESC Rule 239',
+        governingStandard: 'IEEE Std 48 / IEEE C62.11 / NESC Rule 239',
+        overview: 'Three-phase Overhead-to-Underground transition structure at the Gated Residential Subdivision entrance. Steps Feeder 01 lateral overhead conductors down into buried 15 kV / 25 kV XLPE concentric-neutral URD primary loop cables via expulsion fuse cutouts, riser-pole MOV surge arresters, cold-shrink stress-cone pothead terminations, and Schedule 80 galvanized steel conduit dipping underground.',
+        specs: [
+          { k: 'Primary Transition Rating', v: '15 kV Class (13.8 kV L-L / 7.97 kV L-N) · 95 kV / 110 kV BIL' },
+          { k: 'Cable Terminations', v: '3× IEEE Std 48 Class 1 Silicone Rubber Stress-Cone Potheads w/ Rain Sheds' },
+          { k: 'Traveling-Wave Protection', v: '3× 10 kV MOV Riser Arresters (8.4 kV MCOV) Mounted Closest to Potheads' },
+          { k: 'Riser Conduit & Bending', v: '4" Galvanized RGS / Schedule 80 U-Guard Conduit · Sweep R ≥ 12× Cable OD' }
+        ],
+        failureModes: [
+          { title: 'Traveling-Wave Reflected Overvoltage', desc: 'Because underground XLPE surge impedance (~35 Ω) transitions to an open/radial loop end (~2× reflection), riser arresters MUST stay connected tightly at the pothead top.' },
+          { title: 'Water Treeing & Moisture Ingress', desc: 'Cracked weather-seal boots at the stress cone allow moisture into stranded aluminum/copper conductor and accelerate insulation failure.' }
+        ],
+        checklist: [
+          'Verify riser arresters use shortest possible lead length directly to pothead lugs and #4 Cu down-ground.',
+          'Check 3-phase expulsion cutout fuses (65T/80K) and Schedule 80 U-guard seal at concrete apron grade.'
+        ],
+        subparts: [
+          { id: 'riser-potheads', name: '3-Phase Stress-Cone Cable Terminations (Potheads)', tag: 'POTHEAD', material: 'Silicone Rubber Tracking-Resistant Sheds + Stress Cone', role: 'Relieves longitudinal electric field stress where grounded XLPE shield ends and exposes HV conductor to air.', vector: [0.0, 1.5, 0.0] },
+          { id: 'riser-arresters-cutouts', name: 'Riser Expulsion Fuse Cutouts & 10 kV MOV Arresters', tag: '46 / SA', material: '15 kV Cutouts + Polymer MOV Riser Arresters', role: 'Interrupts underground loop cable faults cleanly and clamps surge reflections entering XLPE cable.', vector: [-0.9, 1.1, -0.6] },
+          { id: 'riser-conduit-duct', name: 'Galvanized Steel Riser Conduit, Stand-Off Brackets & U-Guard', tag: 'CONDUIT', material: 'Schedule 80 RGS Pipe + Concrete Sweep Elbow', role: 'Protects 15 kV XLPE concentric-neutral cables from UV, mechanical impact, and mowing crews down into trench.', vector: [0.8, -0.6, 0.7] }
+        ]
+      },
+
+      dt_urd_pad: {
+        id: 'dt_urd_pad',
+        name: 'Gated URD Dead-Front Loop-Feed Pad-Mounted Transformer (150 kVA)',
+        tag: 'DT-URD-PAD (ANSI C57.12.26)',
+        ansiNumber: 'IEEE C57.12.26 / IEEE 386 Dead-Front',
+        governingStandard: 'IEEE Std C57.12.26 / IEEE Std 386 / ANSI Z535',
+        overview: 'Low-profile, tamper-resistant green (Munsell 7GY 3.29/1.5) dead-front loop-feed pad-mounted transformer inside the Gated URD Subdivision. Zero exposed live parts or overhead wires: 15 kV XLPE cables terminate via 200 A Loadbreak Elbows on H1A/H1B feed-thru bushing wells allowing bidirectional sectionalizing around any faulted underground segment.',
+        specs: [
+          { k: 'Rating & Voltage', v: '150 kVA ONAN 65°C Rise | 13.8 kV Loop Primary -> 240/120 V URD Street Pedestals' },
+          { k: 'HV Compartments (IEEE 386)', v: '200 A 15/25 kV Loadbreak Elbow Connectors on H1A / H1B Loop-Feed Wells' },
+          { k: 'Internal Protection', v: 'Externally Removable Bay-O-Net Expulsion Fuse + Partial-Range ELSP Limit Fuse' },
+          { k: 'Clearance & Vault Pad', v: 'Precast Concrete Box Pad + Locking Penta-Bolt Cabinet (Zero Exposed Live Metal)' }
+        ],
+        failureModes: [
+          { title: 'Improper Loadbreak Elbow Parking / Flash', desc: 'Failure to use insulated hot-stick shotgun tool when pulling 200 A loadbreak elbows or failing to ground concentric neutral drains causes internal compartment arc-flash.' },
+          { title: 'Bay-O-Net Drip onto Oil Tank', desc: 'Must relieve internal tank gas pressure via pull-ring valve before withdrawing Bay-O-Net fuse cartridge.' }
+        ],
+        checklist: [
+          'Confirm Munsell green cabinet penta-bolt lock and padlock engaged after switching.',
+          'Check 200 A loadbreak elbows seated to yellow latch indicator ring and parking stand arrester bonded.'
+        ],
+        subparts: [
+          { id: 'dt-tank-fins', name: 'Munsell Green Tamper-Proof Steel Hood, Sill & Precast Pad', tag: 'CABINET', material: '12-Ga Corrosion-Resistant Steel + Precast Pad', role: 'Forms a dead-front, child-safe weatherproof enclosure flush against subdivision landscaping.', vector: [-0.9, 0.0, 0.0] },
+          { id: 'dt-core-coil', name: 'Low-Loss CRGO Core & Interleaved Aluminum/Copper Coils', tag: 'CORE', material: 'CRGO Steel + FR3 Envirotemp Oil', role: 'Quietly steps primary underground loop voltage to 240/120 V residential URD pedestals.', vector: [0.0, 1.2, 0.0] },
+          { id: 'dt-hv-bushing', name: '200 A Dead-Front Loadbreak Elbows (H1A / H1B Loop-Feed)', tag: 'ELBOWS', material: 'IEEE 386 EPDM Molded Peroxide-Cured Shielded Elbows', role: 'Permits hot-stick loop sectionalizing so adjacent homes keep power during cable fault repair.', vector: [-0.6, 0.9, 0.85] },
+          { id: 'dt-lv-bushings', name: '240/120 V Secondary Spade Bushings & Underground Service Leads', tag: 'X1-X0-X2', material: 'Tin-Plated Cu Spades + 350 kcmil USE-2 Cable', role: 'Exits bottom vault window directly to underground secondary pedestals serving subdivision homes.', vector: [0.95, 0.25, 0.85] },
+          { id: 'dt-fuse-cutout', name: 'Drawout Bay-O-Net Expulsion Fuse & Drip Shield', tag: 'BAY-O-NET', material: 'Drawout Cartridge Holder + ELSP Backup', role: 'Provides external overload/fault clearing without opening the main transformer tank cover.', vector: [-0.85, 1.25, -0.45] },
+          { id: 'dt-arrester-ground', name: 'Dead-Front Elbow MOV Arrester & Concentric Neutral Ground Bus', tag: 'SA-URD', material: 'EPDM Dead-Front Arrester + Cu Drain Bus', role: 'Protects radial open-point reflections inside the loop and bonds all cable concentric neutrals.', vector: [0.85, 0.85, -0.75] }
+        ]
+      },
+
+      urd_vista_swgr: {
+        id: 'urd_vista_swgr',
+        name: 'Pad-Mounted SF6 / Solid-Dielectric Underground Switchgear (Vista / PMH-9)',
+        tag: 'URD VISTA SWGR (600A)',
+        ansiNumber: 'IEEE C37.74 / PMH-9 Loop Switchgear',
+        governingStandard: 'IEEE Std C37.74 / IEEE Std 386',
+        overview: 'Low-profile pad-mounted 4-way SF6 / solid-dielectric Vista underground distribution switchgear anchoring the Gated URD Subdivision main loop. Provides two 600 A loadbreak source ways (bolted dead-front T-bodies) and two 200 A vacuum fault-interrupter (VFI) tap ways feeding residential loop branches with micro-processor overcurrent protection and visible open-gap viewing windows.',
+        specs: [
+          { k: 'Main Loop Bus Rating', v: '15.5 kV / 25 kV · 600 A Continuous Main Bus · 25 kA Symmetrical Fault Duty' },
+          { k: 'Ways Configuration', v: '2× 600 A Three-Phase Loadbreak Switches + 2× 200 A Resettable Vacuum Fault Interrupters' },
+          { k: 'Dead-Front Interfaces', v: '600 A Bolted T-Body Connectors + Capacitive Voltage Test Points' },
+          { k: 'Insulation Medium', v: 'Hermetically Sealed Low-Pressure SF6 Tank (or Solid EPDM Dielectric) w/ Viewing Window' }
+        ],
+        failureModes: [
+          { title: 'Low SF6 Gas / Vacuum Loss', desc: 'Color-coded gas pressure gauge enters red lockout zone; switch cannot safely interrupt load until gas pressure or solid module integrity is restored.' }
+        ],
+        checklist: [
+          'Verify pressure gauge needle in green zone before operating 600 A loadbreak handle.',
+          'Visually confirm open blade / visible break position through illuminated polycarbonate viewing window.'
+        ],
+        subparts: [
+          { id: 'vista-enclosure', name: 'Tamper-Resistant Stainless/Green Enclosure & Concrete Vault', tag: 'VAULT', material: 'Stainless 304 / Powder-Coat Steel', role: 'Shields SF6 switchgear module above underground 600 A / 200 A cable pulling pit.', vector: [0.0, 1.3, 0.0] },
+          { id: 'vista-sf6-tank', name: 'Sealed SF6 / Solid-Dielectric Tank w/ Visible Viewing Windows', tag: 'SF6-TANK', material: 'Laser-Welded 304L SS + Polycarbonate Windows', role: 'Houses 3-position loadbreak switches (Closed-Open-Ground) and vacuum interrupters.', vector: [-0.8, 0.5, 0.0] },
+          { id: 'vista-elbows-bus', name: '600 A T-Body Source Ways & 200 A VFI Underground Loop Taps', tag: 'WAYS 1-4', material: 'IEEE 386 600A T-Bodies + 200A Elbows', role: 'Distributes underground primary power along West and East subdivision URD loop trenches.', vector: [0.8, 0.2, 0.8] }
+        ]
+      },
+
+      dist_pole_p1: {
+        id: 'dist_pole_p1',
+        name: 'Distribution Pole #1 — Galvanized Tubular Steel Recloser Structure (79-ACR1)',
+        tag: 'POLE P1 (Galv. Tubular Steel)',
+        ansiNumber: 'NESC Grade B Tubular Steel Structure',
+        governingStandard: 'ASCE 48 / NESC C2 Rules 232 & 250 / RUS Bull. 1724E',
+        overview: '40 ft tapered dodecagonal galvanized tubular steel utility pole mounted on a drilled concrete pier with an 8-bolt anchor flange, supporting the 13.8 kV Feeder 01 main trunk and the 79-ACR1 Automatic Circuit Recloser, complete with galvanized steel channel crossarm, polymer pin insulators, secondary spool rack, and copper ground lug.',
+        specs: [
+          { k: 'Pole Material & Foundation', v: '40 ft Dodecagonal Tapered Galv. Steel (ASTM A572) on Drilled Concrete Pier + 8× Anchor Bolts' },
+          { k: 'NESC Vertical Clearance', v: '26.2 ft (8.0 m) Phase Wire Height >= 18.5 ft NESC Road Crossing Min' },
+          { k: 'Crossarm & Insulators', v: '8 ft Galvanized Steel Channel Crossarm w/ Bolted Gusset Collar + Polymer Pin Insulators' },
+          { k: 'Conductor Span & Sag', v: '60 m Ruling Span (#4/0 ACSR Penguin) -> Sag S = wL²/(8T) = 0.42 m' }
+        ],
+        failureModes: [
+          { title: 'Crossarm Tracking / Pole-Top Fire', desc: 'Caused by contaminated porcelain pin insulators or loose hardware bonding under damp coastal fog.' }
+        ],
+        checklist: [
+          'Confirm 6.0 ft burial depth mark, intact PVC ground wire molding, and V-brace lag bolts.',
+          'Verify 13.8 kV vertical ground clearance well above 18.5 ft NESC minimum over service road.'
+        ],
+        subparts: [
+          { id: 'pole-shaft-ground', name: 'Class 2 Treated Pole Shaft, Ground Wire & Butt Rod', tag: 'POLE', material: 'CCA Wood / Pre-Stressed Concrete + 5/8"x8ft Rod', role: 'Transfers wind & conductor weight into soil via 6.0 ft embedment depth and earths hardware.', vector: [0.0, -0.6, 0.0] },
+          { id: 'pole-crossarm-brace', name: 'Treated Timber/FRP Crossarm & Galvanized V-Braces', tag: 'X-ARM', material: '8 ft Treated Crossarm + Hot-Dip Galv. Flat Braces', role: 'Maintains horizontal 1.65 m phase-to-phase spacing along Feeder 01 corridor.', vector: [0.0, 1.2, -0.9] },
+          { id: 'pole-insulators', name: 'ANSI 55-5 Porcelain Pin & Post Line Insulators', tag: 'INSUL', material: 'Glazed Brown Porcelain (110 kV BIL Wet/Dry)', role: 'Supports energized 13.8 kV #4/0 ACSR phase conductors atop crossarm pins.', vector: [0.0, 1.95, 0.85] },
+          { id: 'pole-guy-anchor', name: 'EHS Down-Guy Strand, Strain Insulator & Anchor Guard', tag: 'GUY', material: '3/8" EHS Galvanized Steel + Yellow HDPE Guard', role: 'Counteracts longitudinal/transverse tension unbalance without bending the pole.', vector: [-1.35, -0.35, 1.1] },
+          { id: 'pole-spool-rack', name: '3-Wire Secondary Spool Rack (ANSI 53-2 Spools)', tag: 'RACK', material: 'Galvanized Rack + White Porcelain Spools', role: 'Carries joint-use 240/120 V secondary/streetlighting neutral & service drops.', vector: [1.15, 0.45, -0.8] }
+        ]
+      },
+
+      dist_pole_p2: {
+        id: 'dist_pole_p2',
+        name: 'Distribution Pole #2 — Tubular Steel Sectionalizer Structure (34-SECT)',
+        tag: 'POLE P2 (Galv. Steel Tangent)',
+        ansiNumber: 'NESC Line Tangent & Sectionalizer Support',
+        governingStandard: 'ASCE 48 / NESC C2 Rule 232',
+        overview: 'Intermediate 40 ft tapered galvanized tubular steel pole on a reinforced concrete pier carrying 3-phase 13.8 kV conductors, 34-SECT line sectionalizer steel crossarm assembly, polymer pin insulators, secondary neutral rack, and copper base ground lug.',
+        specs: [
+          { k: 'Pole Class & Setting', v: '40 ft Class 2 Pole | Setting Depth = 6.0 ft (10% L + 2 ft)' },
+          { k: 'Phase Separation', v: '1.65 m Horizontal Phase-to-Phase (Feeder 01 Mainline)' },
+          { k: 'Insulator Rating', v: 'ANSI Class 55-5 Brown Porcelain Pin Insulators (57 kV Wet CFO)' },
+          { k: 'Parabolic Span Sag', v: 'Span L = 18.0 m (scaled field corridor) | Ground Clearance = 7.4 m' }
+        ],
+        failureModes: [
+          { title: 'Broken Tie-Wire Conductor Release', desc: 'Wind-induced aeolian vibration can fatigue top-groove aluminum tie wire at pin insulator necks.' }
+        ],
+        checklist: [
+          'Check top-tie preformed armor rods and sectionalizer crossarm thru-bolts.',
+          'Confirm intact ground molding down to earth rod.'
+        ],
+        subparts: [
+          { id: 'pole-shaft-ground', name: 'Class 2 Treated Pole Shaft, Ground Wire & Butt Rod', tag: 'POLE', material: 'Treated Timber + #4 Copper Ground Lead', role: 'Supports mainline 34-SECT sectionalizer frame and grounds metal braces.', vector: [0.0, -0.6, 0.0] },
+          { id: 'pole-crossarm-brace', name: '8 ft Mainline Crossarm & Steel V-Braces', tag: 'X-ARM', material: 'Wood/FRP Arm + Galvanized Braces', role: 'Holds phases A-B-C at equal elevation ahead of lateral tap.', vector: [0.0, 1.2, -0.9] },
+          { id: 'pole-insulators', name: 'ANSI 55-5 Pin Insulators & Polymer Standoffs', tag: 'INSUL', material: 'Wet-Process Glazed Porcelain', role: 'Insulates 13.8 kV mainline wires from grounded crossarm hardware.', vector: [0.0, 1.95, 0.85] },
+          { id: 'pole-guy-anchor', name: 'Storm / Lateral Balance Guy & Anchor Assembly', tag: 'GUY', material: 'EHS Steel Guy + Helical Screw Anchor', role: 'Provides storm stability against 150 km/h typhoon wind loading.', vector: [-1.35, -0.35, 1.1] },
+          { id: 'pole-spool-rack', name: '3-Wire Secondary Spool Rack & Neutral Clamp', tag: 'RACK', material: 'ANSI 53-2 Porcelain Spools', role: 'Dead-ends common multi-grounded neutral (MGN) continuous through feeder.', vector: [1.15, 0.45, -0.8] }
+        ]
+      },
+
+      dist_pole_p3: {
+        id: 'dist_pole_p3',
+        name: 'Distribution Pole #3 — Tubular Steel Double-Arm Lateral & Guy Structure',
+        tag: 'POLE P3 (Galv. Steel Double-Arm)',
+        ansiNumber: 'NESC Grade B Double-Crossarm Junction',
+        governingStandard: 'ASCE 48 / NESC C2 Rules 250–261',
+        overview: 'Heavy-duty double-arm galvanized tubular steel junction pole where the North Residential lateral branches off Feeder 01 via the 100K Expulsion Fuse Cutout. Equipped with double steel channel crossarms, polymer suspension dead-end bells, angled down-guy anchor to a galvanized stub pole, and secondary spool rack.',
+        specs: [
+          { k: 'Pole Class & Structure', v: '45 ft Class 1 Junction Pole | Setting Depth = 6.5 ft (0.10*45+2 ft)' },
+          { k: 'Double Crossarm Buck-Arm', v: 'Mainline Double Arm + Perpendicular Lateral Buck-Arm (0.18 m Steel Spacer)' },
+          { k: 'Dead-End & Guy Hardware', v: '2-Bell Polymer/Porcelain Dead-End Strings + 3/8" EHS Down-Guy & Anchor' },
+          { k: 'Guy Lead-to-Height', v: 'Lead = 4.2 m on Height = 6.9 m (Down-Guy Guard Installed Bottom 2.4 m)' }
+        ],
+        failureModes: [
+          { title: 'Slack Down-Guy Leaning Pole', desc: 'Anchor creep under soaked soil causes pole lean and reduced conductor ground clearance.' }
+        ],
+        checklist: [
+          'Inspect double-arm spacer bolts, dead-end shoes, and yellow pedestrian guy guard visibility.',
+          'Verify lateral cutout hot-line clamps and buck-arm minimum vertical separation.'
+        ],
+        subparts: [
+          { id: 'pole-shaft-ground', name: '45 ft Class 1 Heavy Junction Pole & Earth Ground', tag: 'POLE', material: 'Class 1 Pole + Copper Grounding Molding', role: 'Sustains bidirectional longitudinal tension of mainline + north lateral takeoff.', vector: [0.0, -0.6, 0.0] },
+          { id: 'pole-crossarm-brace', name: 'Double-Crossarm Assembly & Heavy V-Braces', tag: 'DBL-ARM', material: 'Dual 8 ft Arms + Through-Bolted V-Braces', role: 'Handles dead-end pull of lateral tap conductors without crossarm twist.', vector: [0.0, 1.2, -0.9] },
+          { id: 'pole-insulators', name: 'Dead-End Suspension Strain Bells & Pin Insulators', tag: 'BELLS', material: 'ANSI 52-1 Porcelain Strain Discs + Pins', role: 'Terminates full mechanical conductor tension (10 kN/phase) at takeoff.', vector: [0.0, 1.95, 0.85] },
+          { id: 'pole-guy-anchor', name: 'Anchored Down-Guy Wire, Johnny-Ball & Yellow Guard', tag: 'GUY-ANCH', material: 'EHS Guy + Guy Strain Insulator + Yellow HDPE Guard', role: 'Transfers unbalanced horizontal lateral pull safely into soil anchor.', vector: [-1.35, -0.35, 1.1] },
+          { id: 'pole-spool-rack', name: 'Secondary MGN Neutral Spool Rack', tag: 'RACK', material: '3-Wire Spool Bracket + Split-Bolt Neutral Tap', role: 'Bonds multi-grounded neutral seamlessly across mainline and lateral tap.', vector: [1.15, 0.45, -0.8] }
+        ]
+      },
+
+      dist_pole_p4: {
+        id: 'dist_pole_p4',
+        name: 'Distribution Pole #4 — Tubular Steel Double-Arm Dead-End & Tie Boundary',
+        tag: 'POLE P4 (Galv. Steel Dead-End)',
+        ansiNumber: 'NESC Dead-End + Tie Boundary',
+        governingStandard: 'ASCE 48 / NESC C2 / IEEE Std 524',
+        overview: 'Heavy-class tapered galvanized tubular steel double-arm dead-end pole anchoring the Feeder 01 trunk ahead of the 79-TIE1 loop recloser switch. Mounted on a drilled concrete caisson pier with bolted anchor plate, polymer suspension dead-end bells, EHS down-guy anchor, and base grounding lug.',
+        specs: [
+          { k: 'Pole Class & Setting', v: '45 ft Class 1 Dead-End Pole | Setting Depth = 6.5 ft' },
+          { k: 'Dead-End Strength', v: 'Double Crossarm + Dual Strain Insulators Rated 15 klbf per Phase' },
+          { k: 'Guy & Anchor Spec', v: '3/8" 7-Strand EHS Guy (15,400 lbf UTS) -> Expanding Soil Anchor' },
+          { k: 'Clearance Check', v: '7.4 m Mainline Elevation (+1.9 m NESC Margin above Highway Envelope)' }
+        ],
+        failureModes: [
+          { title: 'Dead-End Clamp Corona / Slip', desc: 'Improperly torqued bolted dead-end U-bolts can allow conductor slip and heated splice joints.' }
+        ],
+        checklist: [
+          'Verify infrared thermal parity across bolted dead-end jumpers feeding Commercial & Industrial taps.',
+          'Check guy wire tension and yellow guy guard integrity near public corridor.'
+        ],
+        subparts: [
+          { id: 'pole-shaft-ground', name: '45 ft Class 1 Dead-End Pole & Butt Ground Rod', tag: 'POLE', material: 'Heavy-Class Treated Shaft + 5/8"x8ft Cu Rod', role: 'Anchors eastern span termination and bonds dead-end hardware to common earth.', vector: [0.0, -0.6, 0.0] },
+          { id: 'pole-crossarm-brace', name: 'Double-Crossarm Dead-End & Heavy Steel V-Braces', tag: 'DBL-ARM', material: 'Double Steel/Timber Crossarms + Spacers', role: 'Transfers equal tension across outer/inner phase dead-end shackles.', vector: [0.0, 1.2, -0.9] },
+          { id: 'pole-insulators', name: 'Dead-End Strain Bells & Overhead Jumper Posts', tag: 'STRAIN', material: 'Glazed Porcelain/Silicone Suspension Bells', role: 'Provides full mechanical dead-ending plus slack loop jumper clearance.', vector: [0.0, 1.95, 0.85] },
+          { id: 'pole-guy-anchor', name: 'Down-Guy Strand, Strain Insulator & Anchor Guard', tag: 'GUY-ANCH', material: 'EHS Steel + Helical Anchor + Yellow Guard', role: 'Opposes dead-end span tension during open-tie conditions.', vector: [-1.35, -0.35, 1.1] },
+          { id: 'pole-spool-rack', name: '3-Wire Secondary Spool Rack & Neutral Clamp', tag: 'RACK', material: 'Porcelain Spools + Parallel Groove Clamp', role: 'Links feeder neutral to Commercial & Industrial substation ground electrodes.', vector: [1.15, 0.45, -0.8] }
+        ]
+      },
+
+      ind_hv_bay: {
+        id: 'ind_hv_bay',
+        name: 'Dedicated HV Industrial Sub-Transmission Feeder Bay (52-IND)',
+        tag: '52-IND BAY (69 / 138 kV)',
+        ansiNumber: 'ANSI 52-IND / 89-INDA / 89-INDB / 21-IND',
+        governingStandard: 'IEEE Std C37.04 / IEEE Std 1427 / IEEE C37.113',
+        overview: 'Dedicated sub-transmission outgoing bay located at the North-East quadrant of Substation A. Taps directly from the 69 kV (Tiers 1–2) or 138 kV (Tiers 3–4) busbar—bypassing the 13.8 kV city distribution buses completely—to supply the Customer-Owned 25 MVA Heavy Industrial Steel Mill Substation via a private 3-phase steel lattice/monopole line.',
+        specs: [
+          { k: 'Tap Bus Voltage', v: '69 kV (Tiers 1–2) or 138 kV (Tiers 3–4) Dedicated Sub-Transmission' },
+          { k: 'Switching Lineup', v: '89-INDA Line Isolator -> 52-IND Live-Tank SF6 Breaker -> 89-INDB Line Disconnect' },
+          { k: 'Metering & Protection', v: '600/5 A C800 Bushing/Free-Standing CTs + ANSI 21-IND / 50/51-IND / 67N Relay' },
+          { k: 'Surge & Takeoff', v: 'Station-Class MOV Arresters + North-East Lattice Takeoff Gantry (No City Overlap)' }
+        ],
+        failureModes: [
+          { title: 'Sub-Transmission Arc-Furnace Flicker', desc: 'Isolating industrial steel mill arc furnaces onto 52-IND at 69/138 kV prevents ΔV > 1% light flicker on residential 13.8 kV Feeders F1–F4.' },
+          { title: 'Selective Coordination Loss with 52-CUST', desc: 'If 52-IND 51-IND pickup drops below 1.25× 52-CUST curve, plant-side motor faults nuisance-trip the utility bay.' }
+        ],
+        checklist: [
+          'Verify interlocking between 89-INDA, 52-IND, and 89-INDB before operating North ROW line disconnects.',
+          'Confirm North ROW steel tower overhead conductors clear Substation A precast perimeter security wall cleanly.'
+        ],
+        subparts: [
+          { id: 'ind-hv-cb', name: '52-IND Live-Tank SF6 Industrial Feeder Breaker', tag: '52-IND', material: '72.5 / 145 kV SF6 Puffer Interrupter', role: 'Interrupts dedicated HV industrial sub-transmission fault currents up to 40 kA.', vector: [0.0, 1.3, 0.0] },
+          { id: 'ind-hv-ds', name: '89-INDA & 89-INDB Motor-Operated Flanking Disconnects', tag: '89-IND', material: 'Center-Break Copper Blades + Polymer Posts', role: 'Provides visible air-gap LOTO isolation on both sides of 52-IND.', vector: [-1.1, 0.8, 0.5] },
+          { id: 'ind-hv-gantry', name: 'North-East HV Industrial Takeoff Gantry & Arresters', tag: 'GANTRY', material: 'Galvanized Lattice Portal + Station MOV Stacks', role: 'Anchors tensioned ACSR conductors spanning North ROW toward 52-CUST.', vector: [1.1, 1.8, -0.5] }
+        ]
+      },
+
+      dt_uni_500: {
+        id: 'dt_uni_500',
+        name: 'East University Campus & Residential Pad-Mounted Substation (500 kVA)',
+        tag: 'DT-UNI-500 (SUB B · 52-F3)',
+        ansiNumber: 'IEEE C57.12.34 Dead-Front Loop-Feed Pad-Mount',
+        governingStandard: 'IEEE Std C57.12.34 / NEC Art. 450 / IEEE 1547 Solar Readiness',
+        overview: '500 kVA ONAN three-phase pad-mounted distribution transformer energized by Substation B Feeder 03 (52-F3) along the 13.8 kV East Residential & University Campus corridor. Supplies Engineering Hall (with rooftop solar PV micro-generation), Science Library, and East Apartment blocks, while backstopping Loop 1 through normally-open tie 79-TIE1.',
+        specs: [
+          { k: 'Rating & Voltage', v: '500 kVA ONAN 65°C Rise | 13.8 kV (Dyn11) -> 208Y/120 V Campus Distribution' },
+          { k: 'Feeder Source', v: 'Substation B 52-F3 (13.8 kV) via 140 m East ROW Overhead + Campus Dip Riser' },
+          { k: 'Primary / Secondary FLA', v: 'I1 = 20.9 A @ 13.8 kV | I2 = 1,388 A @ 208Y/120 V (Z = 4.9%)' },
+          { k: 'FLISR Tie Role', v: 'Coordinates with 79-TIE1 (Normally Open) for bidirectional Loop 1 restoration' }
+        ],
+        failureModes: [
+          { title: 'PV Reverse Power Flow', desc: 'Campus rooftop PV backfeed on 52-F3 can raise local feeder voltage by +1.5% under light summer load.' }
+        ],
+        checklist: [
+          'Check Bay-O-Net primary fuses and secondary 1,600 A campus main molded-case breaker.',
+          'Verify IEEE 1547 anti-islanding sync ahead of closing 79-TIE1.'
+        ],
+        subparts: [
+          { id: 'dt-tank-fins', name: 'Munsell Green Corrugated Steel Tank & Cooling Fins', tag: 'TANK', material: 'Tamper-Resistant Steel Cabinet + Radiator Fins', role: 'Cools continuous academic HVAC and laboratory equipment loads.', vector: [-0.85, 0.0, 0.0] },
+          { id: 'dt-core-coil', name: 'Low-Loss Amorphous / CRGO 3-Phase Core & Coil', tag: 'CORE', material: 'CRGO Steel + Vacuum-Impregnated Coils', role: 'Steps 13.8 kV 52-F3 primary down to 208Y/120 V campus utilization.', vector: [0.0, 1.35, 0.0] },
+          { id: 'dt-hv-bushing', name: 'IEEE 386 200 A Loadbreak Loop Bushings (H1A/H1B)', tag: 'H1A/B', material: 'Dead-Front Separable EPDM Wells + Elbows', role: 'Connects enclosed 15 kV campus XLPE loop cables with zero exposed live metal.', vector: [0.0, 2.0, -0.4] },
+          { id: 'dt-lv-bushings', name: '1,388 A Low-Voltage X0-X3 Copper Spades & Bus Duct', tag: 'X0-X3', material: 'Copper Spades + Multi-Conduit Campus Feeders', role: 'Feeds Engineering Hall, Science Library, and East Residential apartments.', vector: [0.9, 0.25, 0.8] },
+          { id: 'dt-fuse-cutout', name: 'Bay-O-Net Expulsion & Current-Limiting Fuse Cartridge', tag: 'FUSE', material: 'Externally Draw-Out Dual-Sensing Fuse', role: 'Isolates internal transformer faults cleanly without disturbing 52-F3 trunk.', vector: [-0.8, 1.5, 0.6] },
+          { id: 'dt-arrester-ground', name: 'Elbow-Connected MOV Arresters & Campus Ground Rods', tag: 'SA-GND', material: 'Dead-Front Parking Arrester + Cu-Clad Rods', role: 'Clamps switching transients on underground campus loop.', vector: [0.85, 0.9, -0.7] }
+        ]
+      },
+
+      dt_mun_1000: {
+        id: 'dt_mun_1000',
+        name: 'Municipal Water Pumping & Logistics Hub Substation (1,000 kVA)',
+        tag: 'DT-MUN-1000 (SUB B · 52-F4)',
+        ansiNumber: 'IEEE C57.12.34 Primary-Metered Pad-Mount Station',
+        governingStandard: 'IEEE Std C57.12.34 / NEC Art. 450 / NFPA 20 Water Supply',
+        overview: '1,000 kVA ONAN/ONAF pad-mounted distribution substation supplied by Substation B Feeder 04 (52-F4). Energizes the Municipal Water Pumping Station (dual elevated/ground storage tanks, booster VFD pumps) and East Logistics Hub, anchored to Loop 2 normally-open tie switch 89-TIE2.',
+        specs: [
+          { k: 'Rating & Voltage', v: '1,000 kVA ONAN | 13.8 kV -> 480Y/277 V Municipal Booster MCC (Z = 5.5%)' },
+          { k: 'Feeder Source', v: 'Substation B 52-F4 (13.8 kV) via 140 m East ROW Overhead Pole Line' },
+          { k: 'Primary / Secondary FLA', v: 'I1 = 41.8 A @ 13.8 kV | I2 = 1,203 A @ 480 V (Isc = 21.9 kA sym)' },
+          { k: 'Loop Restoration', v: 'Transferable onto Sub A 52-F2 via normally-open motorized tie switch 89-TIE2' }
+        ],
+        failureModes: [
+          { title: 'Booster Pump VFD Inrush & Tank Overflow Risk', desc: 'Loss of 52-F4 stops potable water pressure; rapid FLISR transfer via 89-TIE2 restores municipal pumping within <5 s.' }
+        ],
+        checklist: [
+          'Verify VFD active harmonic filter and 480 V main 1,600 A MCC breaker readiness.',
+          'Confirm 89-TIE2 SCADA synchrocheck permissives between 52-F2 (CBD) and 52-F4 (Water Plant).'
+        ],
+        subparts: [
+          { id: 'dt-tank-fins', name: '1,000 kVA Welded ANSI 70 / Pad Tank & Radiators', tag: 'TANK', material: 'Heavy Gauge Steel + Panel Radiators', role: 'Sustains continuous 24/7 municipal water booster pumping heat load.', vector: [-0.9, 0.0, 0.0] },
+          { id: 'dt-core-coil', name: 'K-Rated VFD-Duty CRGO Core & Winding Assembly', tag: 'CORE', material: 'K-13 Harmonic-Rated Copper Windings', role: 'Handles non-linear booster VFD currents while maintaining 480Y/277 V regulation.', vector: [0.0, 1.35, 0.0] },
+          { id: 'dt-hv-bushing', name: '15 kV High-Creepage Bushings & Riser Pothead Leads', tag: 'H1-H3', material: 'Porcelain/EPDM Dead-Front Loop Bushings', role: 'Terminates 13.8 kV 52-F4 feed inside locked HV compartment.', vector: [0.0, 2.05, -0.45] },
+          { id: 'dt-lv-bushings', name: '1,203 A Secondary X0-X3 Spades into Pump MCC', tag: 'X0-X3', material: 'Tin-Plated Cu Bus Bars', role: 'Connects 480 V pump motor control center and logistics bay distribution.', vector: [0.95, 0.25, 0.85] },
+          { id: 'dt-fuse-cutout', name: 'Primary 15 kV Current-Limiting Fuse & Loadbreak Switch', tag: 'FUSE', material: '65E Partial-Range CL Fuse + LB Switch', role: 'Clears municipal station internal faults without tripping 52-F4.', vector: [-0.85, 1.55, 0.65] },
+          { id: 'dt-arrester-ground', name: 'Heavy MOV Arresters & Water-Pipe Equipotential Grid', tag: 'SA-GND', material: '10 kV Station-Grade Elbow Arresters + Cu Grid', role: 'Equalizes ground potential across metallic water mains and pump frames.', vector: [0.85, 0.95, -0.75] }
+        ]
+      },
+
+      city_gate: {
+        id: 'city_gate',
+        name: 'Urban Utility District & URD Subdivision Entrance Gatehouse Archway',
+        tag: 'CITY ENTRANCE GATE',
+        ansiNumber: 'NESC Rule 232 Highway Clearance / Community Security Gate',
+        governingStandard: 'NESC C2 Bridge & Overpass Clearances / Municipal Access Code',
+        overview: 'Illuminated municipal boulevard entrance archway and motorized sliding barrier gate spanning the public highway right at the 140 m buffer boundary entering the 4-District City & URD Subdivision. Guarantees full 140 m high-voltage buffer setback from both Substation A and Substation B precast security walls.',
+        specs: [
+          { k: 'Setback Location', v: 'At City Entrance (140.0 m East of Substation A Security Wall)' },
+          { k: 'Portal Overhead Clearance', v: '6.8 m Clear Steel Archway Height (Exceeds NESC/DOT Freight Truck Limit)' },
+          { k: 'Gate Mechanism', v: 'Dual Motorized Sliding Barrier Arms + RF Guardhouse Security Kiosk' },
+          { k: 'Walk Mode Operation', v: 'Click 3D Gate or Press [E] Near Guardhouse to Toggle Open / Closed' }
+        ],
+        failureModes: [
+          { title: 'Closed Gate Vehicle / Crew Collision', desc: 'Reflective yellow/amber beacon and solid collision boundaries protect incoming maintenance boom trucks when secured.' }
+        ],
+        checklist: [
+          'Verify overhead portal sign illumination and clear width for line bucket trucks.',
+          'Confirm unobstructed emergency fire & ambulance lane bypass.'
+        ],
+        subparts: [
+          { id: 'city-gate-arch', name: 'Steel Boulevard Archway Portal & Illuminated District Sign', tag: 'ARCHWAY', material: 'Structural HSS Steel Frame + LED Marquee', role: 'Demarcates the 140 m utility safety buffer boundary entering the city corridor.', vector: [0.0, 1.6, 0.0] },
+          { id: 'city-gate-boom', name: 'Motorized Barrier Arms, Security Booth & Stop Bollards', tag: 'BARRIER', material: 'Reflective Aluminum Arms + Concrete Kiosk', role: 'Controls vehicular entry while clearing field crew walk-through when opened.', vector: [-1.1, 0.4, 0.7] }
+        ]
+      },
+
+      substation_gate: {
+        id: 'substation_gate',
+        name: 'Substation 3.0 m Precast Concrete Security Wall & Motorized Gate',
+        tag: 'CONCRETE WALL / GATE',
+        ansiNumber: 'NESC Section 110 / IEEE Std 80 / NERC CIP-014 Physical Security',
+        governingStandard: 'NESC C2 Rule 110.A1 / IEEE Std 80 / NERC CIP-014',
+        overview: 'Solid 3.0 m reinforced precast concrete panel and pilaster ballistic/anti-climb perimeter security wall topped with 45° angled 3-strand barbed wire & razor coil (3.55 m total height), complete with motorized 6.4 m double-leaf steel vehicle gate, pedestrian man-gate, security guardhouse, RFID keycard bollard, and IEEE 80 flexible copper gate ground braids.',
+        specs: [
+          { k: 'Wall Height & Construction', v: '3.0 m Precast Concrete Panels & Pilasters + 0.55 m Barbed/Razor Topping' },
+          { k: 'Vehicular Clear Width', v: '6.4 m Double-Leaf Heavy-Haul Gate + 1.4 m Pedestrian Man-Gate' },
+          { k: 'IEEE 80 Touch Voltage', v: 'Flexible 4/0 Copper Hinge Braid + Perimeter Ground Loop (<50 V Touch)' },
+          { k: 'Field Walk & Cutaway', v: 'Press [E] or Click Gate to Open | Use Wall Cutaway Toggle for Low Sightlines' }
+        ],
+        failureModes: [
+          { title: 'Broken Gate Hinge Ground Braid', desc: 'Loss of flexible copper jumper turns the steel gate frame into an ungrounded touch-potential hazard during SLG faults.' }
+        ],
+        checklist: [
+          'Inspect flexible braided copper strap jumping across both gate hinges to grounded wall steel embed.',
+          'Confirm HV Danger signage readable at 15 m approach along entrance driveway apron.'
+        ],
+        subparts: [
+          { id: 'gate-leaves', name: 'Heavy Steel Vehicular Swing Gate & Man-Gate', tag: 'LEAVES', material: 'Tubular Steel Crash Gate + Panic Man-Gate', role: 'Pivots open 90 degrees for transformer rigging access and personnel egress.', vector: [-1.4, 0.5, 0.6] },
+          { id: 'gate-posts-barbed', name: '3.0 m Concrete Wall Pilasters & Barbed/Razor Outriggers', tag: 'WALL/BARB', material: 'Precast Concrete + 45° Galvanized Razor-Coil Arms', role: 'Meets NERC CIP & NESC Rule 110 anti-intrusion and ballistic arc shielding.', vector: [0.0, 1.5, 0.0] },
+          { id: 'gate-guardhouse', name: 'Security Guardhouse Booth & RFID Access Bollard', tag: 'GUARD', material: 'Insulated Security Kiosk + Safety Amber Beacon', role: 'Enforces LOTO & PPE sign-in before unauthorized entry into live HV switchyard.', vector: [1.6, 0.4, 0.9] },
+          { id: 'gate-apron-ground', name: 'Asphalt Highway Driveway Apron & 4/0 Cu Hinge Braids', tag: 'APRON', material: 'Paved Asphalt Transition + Flexible Cu Straps', role: 'Connects internal substation road seamlessly to highway while bonding gate to earth grid.', vector: [0.0, -0.45, 1.4] }
         ]
       }
     };
@@ -582,10 +1398,10 @@ def get_js_data():
         maintenance: 'Cantilever SSL = 10 kN. Checks: Verify vertical alignment on insulated base pedestals and inspect pedestal ground insulators (<10 kV insulated standoff for surge counter operation).'
       },
       'la-polymer-sheds': {
-        ansiCode: 'HTV Silicone Rubber Alternating Weather Sheds',
-        fieldSpot: 'Light grey-blue silicone polymer housing molded with alternating large and small horizontal skirts.',
-        workingPrinciple: 'Low-molecular-weight silicone chains continuously migrate to the surface, imparting permanent hydrophobicity—rainwater beads up into isolated spheres rather than forming conductive wet films. Eliminates salt-fog external surface flashovers without requiring periodic washing.',
-        maintenance: 'Creepage distance ≥ 2,140 mm (31 mm/kV). Checks: Hydrophobicity HC1–HC2 water spray check; inspect for chalking or electrical treeing marks.'
+        ansiCode: 'Wet-Process Brown Glazed Porcelain Alternating Weather Sheds',
+        fieldSpot: 'Rich chocolate-brown wet-process glazed porcelain skirt stack joined by bolted metallic intermediate flanges and silver aluminum grading rings.',
+        workingPrinciple: 'Dense vitrified porcelain with silica glaze sheds rain cleanly along long alternate under-rib creepage paths (≥2,140 mm), preventing salt-fog leakage flashovers while intermediate steel flanges dissipate internal heat.',
+        maintenance: 'Creepage distance ≥ 2,140 mm (31 mm/kV). Checks: Inspect glazed sheds for chips or cracks; verify metallic flange fasteners and insulated base pedestal integrity.'
       },
       'la-surge-counter': {
         ansiCode: 'Ground Discharge Lead, Insulating Base & Surge Event Counter + µA Meter',
@@ -734,7 +1550,82 @@ def get_js_data():
         fieldSpot: 'Galvanized steel H-frame portal at the eastern fence line carrying six 15 kV dead-end polymer strings and overhead static shield wire.',
         workingPrinciple: 'Transfers full mechanical line tension of two outgoing 477 kcmil ACSR feeders to concrete pier foundations while guaranteeing >=5.5 m ground clearance over service roads.',
         maintenance: 'Checks: Inspect dead-end compression clamps for broken strands, verify vibration dampers, and check portal leg ground connections.'
-      }
+      },
+      'ngr-enclosure': { ansiCode: 'IEEE C57.32 — Louvered Resistor Housing', fieldSpot: 'Slatted galvanized metal housing perched on 15 kV base insulators beside TR-01.', workingPrinciple: 'Protects staff from 700°C steel grids during SLG fault limitation while venting heat cleanly.', maintenance: 'Check louver screens for nests/rust and verify grounding pad integrity.' },
+      'ngr-resistor-grid': { ansiCode: 'Stainless Steel Punched Grid Stack (10.0 Ω)', fieldSpot: 'Multi-tier zig-zag stainless resistor plates visible inside cutaway side.', workingPrinciple: 'Limits X0 SLG fault to I_g = 7,967V / 10Ω = 797 A for 10 seconds to save TR-01 core and windings from iron burning.', maintenance: 'Measure cold resistance (10.0 Ω ±5%) annually via DLRO.' },
+      'ngr-ct-bushing': { ansiCode: 'X0 Entry Bushing & ANSI 51G Neutral CT (800/5 A)', fieldSpot: 'Porcelain roof insulator topped with X0 copper bus drop and toroidal window CT.', workingPrinciple: 'Samples true zero-sequence 3I0 ground return directly into Control House ANSI 51G relay.', maintenance: 'Confirm CT shorting bar is open in service and check polarity markings.' },
+      'ngr-ground-pad': { ansiCode: '4/0 Cu Earth Return Pad & 15 kV Standoffs', fieldSpot: 'Insulated mounting legs separating neutral housing from ground with single copper earth strap.', workingPrinciple: 'Forces 100% of ground return current through the CT and calibrated 10 Ω bank before entering IEEE 80 earth grid.', maintenance: 'Torque ground pad bolts and keep standoff insulators clean.' },
+      'sal-terminal': { ansiCode: 'Top Bronze Stud & Line Jumper', fieldSpot: 'Clamps tying each 13.8 kV secondary riser directly onto MOV arrester crown.', workingPrinciple: 'Low-inductance straight lead prevents inductive L(di/dt) surge rise above 110 kV BIL.', maintenance: 'Keep connecting lead short (<0.5 m) and torque bronze clamps.' },
+      'sal-zno-core': { ansiCode: '10.2 kV MCOV ZnO Varistor Discs', fieldSpot: 'Stacked ceramic discs inside each arrester column.', workingPrinciple: 'Transition from insulator to micro-second conductor above 24 kV surge crest.', maintenance: 'Infrared check annually for uneven disc heating.' },
+      'sal-sheds': { ansiCode: '15 kV Wet-Process Dark Porcelain Housing', fieldSpot: 'Three dark brown ribbed columns protecting secondary LV bus.', workingPrinciple: 'Delivers ≥430 mm creepage distance against coastal mist pollution.', maintenance: 'Inspect skirts visually with binoculars for hairline glaze cracks.' },
+      'sal-ground-lead': { ansiCode: 'Direct Secondary Rack Ground Lead', fieldSpot: 'Heavy copper pigtail linking arrester bottom base directly to rack ground bar.', workingPrinciple: 'Shunts lightning surges locally to protect TR-01 X1–X3 bushings.', maintenance: 'Verify continuity to IEEE 80 grid.' },
+      'lvct-tank': { ansiCode: 'Outdoor Cycloaliphatic Epoxy Instrument Body', fieldSpot: 'Molded resin metering/protection units inline after 13.8 kV bus.', workingPrinciple: 'Combines high hydrophobic outdoor tracking strength with maintenance-free solid dielectric.', maintenance: 'Wipe chalking resin and inspect secondary conduit box gaskets.' },
+      'lvct-core': { ansiCode: 'Dual Metering (0.3%) & Protection (C200) Cores', fieldSpot: 'Embedded steel toroids carrying 2000/5 A and 120:1 ratios.', workingPrinciple: 'Isolated cores prevent revenue meter burn-out while keeping protection unsaturated at 18.4 kA faults.', maintenance: 'Verify secondary burden below 45 VA and check CT shorting screws.' },
+      'lvct-bushings': { ansiCode: 'Primary Copper Tabs & Secondary Conduit', fieldSpot: 'Bolted NEMA flags on crown and sealed armored conduit to Panel 2.', workingPrinciple: 'Delivers phase currents & voltages continuously to AVR/OLTC and ANSI 51/27 relays.', maintenance: 'Check conduit seals against ant/moisture ingress.' },
+      'lvds-frame': { ansiCode: 'Galvanized Rack Channel & Bearings', fieldSpot: 'Steel base channel mounted on the 13.8 kV overhead support structure.', workingPrinciple: 'Maintains aligned phase spacing and torsional stability for gang opening.', maintenance: 'Grease sealed turntable bearings every 5 years.' },
+      'lvds-insulators': { ansiCode: '15 kV TR-205 Porcelain Post Insulators', fieldSpot: 'Brown vertical porcelain columns beneath disconnect jaws and hinges.', workingPrinciple: '110 kV BIL standoff insulation under 80 kA momentary short-circuit forces.', maintenance: 'Check cement caps and porcelain glaze cleanliness.' },
+      'lvds-blades': { ansiCode: '2,000 A Dual ETP Copper Blades', fieldSpot: 'Bright parallel copper blade arms engaging spring jaw contacts.', workingPrinciple: 'Pinch-effect geometry tightens contacts magnetically under fault spikes.', maintenance: 'Verify silver contact wipe and check IR delta-T < 10°C.' },
+      'lvds-linkage': { ansiCode: 'Vertical Torsion Pipe & LOTO Handle', fieldSpot: 'Operating pipe descending to eye-level lockable handle on rack leg.', workingPrinciple: 'Key/electrical interlock blocks actuation whenever 52-LV is closed.', maintenance: 'Check mechanical stops and padlock hasp alignment.' },
+      'lvcb-frame': { ansiCode: 'Outdoor 15 kV Vacuum Breaker Pedestal', tag: 'LVCB-FRM', fieldSpot: 'Painted steel frame supporting main 52-LV enclosure.', workingPrinciple: 'Anchors breaker against electromagnetic opening shock forces.', maintenance: 'Inspect frame paint and ground braid.' },
+      'lvcb-vacuum-bottles': { ansiCode: '3× Sealed CuCr Vacuum Interrupter Bottles', fieldSpot: 'Concentric ceramic/copper vacuum cylinders inside pole heads.', workingPrinciple: 'Vacuum recovers dielectric strength at ~10 kV/µs after zero-crossing, quenching 31.5 kA arcs inside 12 ms.', maintenance: '36 kV 1-min AC vacuum check + contact erosion travel mark check.' },
+      'lvcb-mech': { ansiCode: '125 VDC Spring Mechanism & Dual Trip Coils', fieldSpot: 'Front cabinet housing motor-wound closing spring and Flag indicator (RED/GREEN).', workingPrinciple: 'Stored-energy opening spring guarantees instant trip even if DC motor fails.', maintenance: 'Check anti-condensation strip heater and trip coil resistance.' },
+      'lvcb-bushings': { ansiCode: '15 kV Entrance Sheds & Line Flag Pads', fieldSpot: 'Three primary/three load side epoxy bushings topped with 2000 A pads.', workingPrinciple: 'Bridges TR-01 buswork seamlessly to 13.8 kV Main Bus.', maintenance: 'IR scan bolted flags annually at peak substation MVA.' },
+      'sst-tank': { ansiCode: '100 kVA Corrugated Mineral-Oil Steel Tank', fieldSpot: 'Compact radiator-finned oil tank supplying Control House auxiliary power.', workingPrinciple: 'Passive ONAN cooling handles continuous auxiliary station loads silently.', maintenance: 'Inspect radiator welds and check top oil temperature.' },
+      'sst-hv-fuses': { ansiCode: '13.8 kV Porcelain Entry & Expulsion Fuses', fieldSpot: 'Roof-mounted brown porcelain bushings fed from 13.8 kV Main Bus.', workingPrinciple: 'Fused tap isolates internal SST fault instantly without darkening feeders.', maintenance: 'Inspect fuse tubes and check silicone animal guards.' },
+      'sst-core-windings': { ansiCode: '100 kVA Step-Down Core (13.8 kV / 480Y-277V)', fieldSpot: 'Internal laminated core and copper coils delivering auxiliary AC.', workingPrinciple: 'Maintains stable 480/277 V power for HVAC, chargers, and ONAF2 transformer fans.', maintenance: 'Verify primary tap changer matches 13.8 kV nominal.' },
+      'sst-lv-cabinet': { ansiCode: '480V Station Service Terminal Box', fieldSpot: 'Side NEMA 3R cabinet routed via buried conduit into Control House.', workingPrinciple: 'Protects main 150 A MCCB feeding AC Panelboard and dual 125V DC battery chargers.', maintenance: 'Verify conduit sealing compound and phase rotation.' },
+      'cap-rack': { ansiCode: 'Insulated Elevated Capacitor Bank Rack', fieldSpot: 'Aluminum rack mounted on 15 kV base insulators beside Feeder bays.', workingPrinciple: 'Floating rack isolates 13.8 kV grounded-wye bank cleanly with neutral CT monitoring.', maintenance: 'Inspect base insulators and neutral imbalance wiring.' },
+      'cap-cans': { ansiCode: '3.6 MVAR All-Film Capacitor Can Units', fieldSpot: 'Rows of steel-cased silver cans topped by dual 15 kV porcelain bushings.', workingPrinciple: 'Supplies 150.6 A leading VARs to counteract inductive feeder motor loads.', maintenance: 'Wait 5 min discharge before touching! Inspect cans for bulged walls.' },
+      'cap-reactors': { ansiCode: 'Current-Limiting Inrush Iron/Air Reactors', fieldSpot: 'Coiled cylindrical inductors ahead of each phase row.', workingPrinciple: 'Blunts transient di/dt inrush spikes during capacitor energization.', maintenance: 'Check coil tie-down bolts against electromagnetic vibration.' },
+      'cap-vcb': { ansiCode: '52-CAP Synchronous Vacuum Capacitor Switch', fieldSpot: 'Dedicated pole/rack vacuum switch with restrike-free contacts.', workingPrinciple: 'Zero-crossing point-on-wave closing suppresses transient overvoltages <1.2 pu.', maintenance: 'Log daily switching counter (<5,000 ops without contact check).' },
+      'f1-frame': { ansiCode: 'Feeder 01 Support Channel & Bypass Rack', fieldSpot: 'Steel structure carrying Feeder 01 breaker and disconnects.', workingPrinciple: 'Organizes radial exit bay clearance cleanly inside 13.8 kV bus zone.', maintenance: 'Verify steel ground grid lugs.' },
+      'f1-vcb': { ansiCode: '52-F1 1,200 A Vacuum Feeder Breaker', fieldSpot: 'Primary breaker guarding Commercial/Industrial Feeder 01 with 79 recloser.', workingPrinciple: 'Clears persistent feeder faults and executes automated 3-shot reclosing.', maintenance: 'Download relay event oscillography after every 79 lockout.' },
+      'f1-disconnects': { ansiCode: '89-F1A / 89-F1B Line & Bus Disconnects', fieldSpot: 'Hook-stick copper blades flanking 52-F1.', workingPrinciple: 'Allows safe isolated breaker rack maintenance while Bus remains live.', maintenance: 'Confirm padlock brackets and latch spring tension.' },
+      'f1-relay-ct': { ansiCode: 'Feeder 01 1200/5 A CTs & Residual Sensing', fieldSpot: 'Epoxy toroidal CTs driving Panel 2 Feeder 01 relay.', workingPrinciple: 'Measures phase and zero-sequence currents for selective 50/51/51N tripping.', maintenance: 'Secondary injection check annually.' },
+      'f2-frame': { ansiCode: 'Feeder 02 Support Channel & Rack', fieldSpot: 'Steel bay frame adjacent to Feeder 01.', workingPrinciple: 'Supports Feeder 02 isolation and 15 kV takeoff conductors.', maintenance: 'Verify anchor bolts and zinc galvanization.' },
+      'f2-vcb': { ansiCode: '52-F2 1,200 A Vacuum Feeder Breaker', fieldSpot: 'Dedicated vacuum breaker controlling radial Feeder 02.', workingPrinciple: 'Provides fast transient clearing and SCADA supervisory switching.', maintenance: 'Check travel time (<3 cycles) and counter increments.' },
+      'f2-disconnects': { ansiCode: '89-F2A / 89-F2B Isolation Switches', fieldSpot: 'Flanking air-break copper blades around 52-F2.', workingPrinciple: 'Visible physical air break for crew LOTO clearances.', maintenance: 'Clean silver jaw faces and inspect porcelain skirts.' },
+      'f2-relay-ct': { ansiCode: 'Feeder 02 1200/5 A Protection CTs', fieldSpot: 'Phase & ground sensing CTs feeding Panel 2 Relay.', workingPrinciple: 'Feeds 50/51/51N elements with accurate fault current wave reproduction.', maintenance: 'Test saturation knee voltage during 5-year PM.' },
+      'rec-tank': { ansiCode: '79-ACR1 Solid-Dielectric Manifold & Top Head', fieldSpot: 'Compact pole-top epoxy housing painted weather-grey on Pole #1.', workingPrinciple: 'Encapsulates magnetic actuator linkages for sub-cycle repeatable opening and reclosing.', maintenance: 'Visual inspection for wildlife nesting or tracking marks.' },
+      'rec-interrupters': { ansiCode: 'Embedded Vacuum Bottles (12.5 kA Sym)', fieldSpot: 'Three vertical cylindrical poles protruding upwards from manifold.', workingPrinciple: 'Executes 2 Fast (Curve A) trips ahead of downstream 100K fuse melt + 2 Slow (Curve B) trips.', maintenance: 'Check mechanical yellow non-reclose handle indicator.' },
+      'rec-bushings': { ansiCode: '15.5 kV Silicone Creepage Sheds', fieldSpot: 'Alternate weather sheds with incoming & outgoing hot-line clamps.', workingPrinciple: 'Guarantees 110 kV BIL across coastal contamination conditions.', maintenance: 'Check bird guards and hot-line clamp compression.' },
+      'rec-control-box': { ansiCode: 'Pole-Base Recloser SEL/Form-6 Control Box', fieldSpot: 'Eye-level aluminum cabinet strapped to lower Pole #1.', workingPrinciple: 'Computes Inverse/Fast curves and reports SCADA FLISR telemetry via radio/fiber.', maintenance: 'Test 24 VDC backup battery under load annually.' },
+      'sect-frame': { ansiCode: 'Crossarm Sectionalizer Mounting Steel', fieldSpot: 'Galvanized channel holding three-phase sectionalizer poles on Pole #2.', workingPrinciple: 'Maintains exact contact geometry while dropout actuators trip.', maintenance: 'Verify pole thru-bolt tightness.' },
+      'sect-insulators': { ansiCode: '15.5 kV Composite Silicone Standoffs', fieldSpot: 'Three insulated support columns along crossarm.', workingPrinciple: 'Provides full 110 kV BIL phase-to-crossarm dielectric withstand.', maintenance: 'Inspect silicone sheds with binoculars.' },
+      'sect-actuators': { ansiCode: 'Zero-Current Dead-Time Dropout Mechanism', fieldSpot: 'Spring-latched hinge blades designed to drop visibly open at count = 2.', workingPrinciple: 'Counts upstream 79-ACR1 current-zero intervals; opens strictly when de-energized—requiring zero arc-quenching chamber!', maintenance: 'Test latch drop torque using calibrated spring scale during line outage.' },
+      'sect-counter': { ansiCode: 'Self-Powered Fault Pulse Counter Module', fieldSpot: 'Enclosed sensing housing registering fault impulses (>160 A -> 0 A).', workingPrinciple: 'Requires NO CTI coordination time curve against upstream recloser—100% selective by pulse count.', maintenance: 'Reset mechanical flags carefully after restoration.' },
+      'fuse-bracket': { ansiCode: 'NEMA Cutout Crossarm Mounting Hook', fieldSpot: 'Compact galvanized J-bracket clamping onto lateral Pole #3 crossarm.', workingPrinciple: 'Anchors C-frame cutout at standard 15-degree forward tilt for clean gravity drop.', maintenance: 'Confirm tight carriage bolt grip on crossarm timber.' },
+      'fuse-insulator': { ansiCode: '15 kV Silicone/Porcelain C-Frame Body', fieldSpot: 'Distinct C-shaped insulator separating live top contact hood from lower trunnion hinge.', workingPrinciple: 'Full 110 kV BIL rating between energized lateral tap and grounded crossarm.', maintenance: 'Inspect top arc-hood copper spring leaf.' },
+      'fuse-tube': { ansiCode: 'Bone-Fiber Fiberglass Expulsion Fuse Tube', fieldSpot: 'Inclined cream/tan cylinder hanging visibly straight down at 180° when blown!', workingPrinciple: 'Arc heat vaporizes internal bone-fiber liner, blasting deionized gas out the bottom muzzle to extinguish fault arcs up to 10 kA.', maintenance: 'Replace charred tube if inner bore diameter expands >10% after repeated faults.' },
+      'fuse-link': { ansiCode: '100K Tin Fuse Link & Braided Leader', fieldSpot: 'Taut copper pigtail exiting bottom cap held by toggle trunnion latch.', workingPrinciple: 'On permanent fault beyond 79-ACR1 fast shots, tin element melts cleanly, releasing toggle latch so tube drops open visually.', maintenance: 'Always replace blown links with identical 100K speed rating (never substitute copper wire!).' },
+      'da-cap': { ansiCode: 'Insulated Raptor/Squirrel Guard Top Cap', fieldSpot: 'Orange/grey slotted dome capping pole-top MOV arresters.', workingPrinciple: 'Blocks birds spanning live 13.8 kV riser clamps to steel brackets.', maintenance: 'Inspect locking snap tabs.' },
+      'da-zno': { ansiCode: '8.4 kV MCOV Distribution MOV Discs', fieldSpot: 'Internal ZnO stack clamped in series ahead of transformers and lateral poles.', workingPrinciple: 'Clamps fast-front lightning waves safely below 35 kV peak.', maintenance: 'IR check during line patrol.' },
+      'da-sheds': { ansiCode: 'Compact 15 kV Polymer/Porcelain Sheds', fieldSpot: 'Slender dark ribbed columns alongside cutout on Pole #3.', workingPrinciple: 'Short-profile lightning protection mounted right at protected transformer terminals.', maintenance: 'Inspect housing for burst tracking.' },
+      'da-isolator': { ansiCode: 'Explosive Ground-Lead Disconnector', fieldSpot: 'Small white cartridge hanging below arrester base feeding earth lead.', workingPrinciple: 'Detonates a tiny primer if ZnO discs short permanently, blowing off ground lead visibly so crew spots faulty unit from truck.', maintenance: 'Never touch dangling disconnector lead until line isolated.' },
+      'subb-xfmr': { ansiCode: 'Substation B 69/13.8 kV Tie Transformer', fieldSpot: 'Eastern remote tie substation feeding 13.8 kV Bus B at 1.00 pu.', workingPrinciple: 'Maintains independent N-1 alternate generation path for automated FLISR back-feeding.', maintenance: 'Telemetry polled continuously by SCADA Master.' },
+      'subb-tie-recloser': { ansiCode: '79-TIE Normally-Open Loop Tie Recloser', fieldSpot: 'Tie recloser sitting at eastern Feeder 01 boundary marked NORMALLY OPEN.', workingPrinciple: 'Closes upon FLISR command only after upstream faulted segment is locked open, restoring Industrial & Commercial customers in <4.2 s.', maintenance: 'Verify ANSI 25 synchrocheck relay health monthly.' },
+      'subb-bus-rack': { ansiCode: 'Substation B Dead-End Tie Gantry', fieldSpot: 'Steel H-frame facing west toward Main Substation Feeder 01.', workingPrinciple: 'Establishes mechanical open-tie span separation between two independent 69 kV sources.', maintenance: 'Check dead-end clamps and ground bonds.' },
+      'subb-rtu': { ansiCode: 'Substation B FLISR SCADA RTU Cabinet', fieldSpot: 'Control box monitoring tie voltage magnitude & phase angle.', workingPrinciple: 'Communicates via DNP3 peer-to-peer FLISR loop automation protocol.', maintenance: 'Confirm redundant fiber/cellular link latency <50 ms.' },
+      'dt-tank-fins': { ansiCode: 'ANSI 70 Tank, Fin Radiators, Lid & Lifting Lugs', fieldSpot: 'Cylindrical rolled-steel or corrugated pad-mounted weatherproof tank painted light utility gray with bolted top cover and kVA stencil.', workingPrinciple: 'Houses dielectric mineral oil (65°C rise) circulating by natural thermosiphon convection (ONAN) through vertical radiator fins to dissipate I²R winding and core hysteresis losses.', maintenance: 'Inspect weld seams for oil weeping, check oil level gauge at 25°C reference mark, and test tank-to-ground continuity.' },
+      'dt-core-coil': { ansiCode: 'CRGO Wound Core & Kraft-Insulated Copper/Al Windings', fieldSpot: 'Internal magnetic silicon-steel core and concentric HV/LV winding assembly suspended beneath the top cover.', workingPrinciple: 'Transfers energy by mutual magnetic induction at 7.967 kV L-N (or 13.8 kV L-L) down to 240/120 V or 480Y/277 V utilization voltage with 1.8–4.5% series leakage impedance.', maintenance: 'Perform Turns Ratio (TTR), winding resistance, and insulation Megger tests whenever tank cover is unbolted.' },
+      'dt-hv-bushing': { ansiCode: 'Glazed Brown Porcelain HV Bushing (H₁ / H₂) & Wildlife Guard', fieldSpot: 'Skyward-pointing ribbed wet-process porcelain insulator petticoats topped with brass eyebolt terminal and snapped-on polymer squirrel guard.', workingPrinciple: 'Provides ≥95 kV BIL basic impulse insulation level and leakage creepage across 13.8 kV primary leads while shielding live bronze caps against avian/squirrel phase-to-ground bridging.', maintenance: 'Clean salt/dust contamination, inspect porcelain skirts for tracking or chips, and verify wildlife cap latches securely.' },
+      'dt-lv-bushings': { ansiCode: 'Secondary Bushings (X₁, X₀, X₂ / X₁–X₃) & Triplex Drops', fieldSpot: 'Side-wall molded polymer/porcelain LV terminals bonded to insulated aluminum triplex/quadruplex service drop cables.', workingPrinciple: 'Delivers high-current utilization power (up to >1,800 A on 1,500 kVA pads) with X₀ rigidly bonded to both the neutral messenger and tank ground strap per NEC/NESC.', maintenance: 'Torque spade NEMA compression lugs, infrared-scan for hot spots >15°C above ambient, and verify drip loops keep water out of conduit.' },
+      'dt-fuse-cutout': { ansiCode: 'ANSI C37.41 Expulsion Fuse Cutout (15 kV, 100 A Frame)', fieldSpot: 'Porcelain C-frame cutout mounted on a fiberglass crossarm bracket with a hot-line clamp tapping the primary overhead phase via a stirrup.', workingPrinciple: 'Contains a replaceable Type K (fast) or Type T (slow) silver-alloy fuse link inside a boric-acid/fiber expulsion tube; fault gas pressure extinguishes the arc and drops the barrel open for visible isolation.', maintenance: 'Never re-fuse with oversized links; verify fuseholder trunnion alignment and operate only under load with a Loadbuster tool.' },
+      'dt-arrester-ground': { ansiCode: '10 kV MOV Surge Arrester (MCOV 8.4 kV) & Driven Ground Rod', fieldSpot: 'Gray polymer-housed ZnO surge arrester mounted beside the cutout and bonded down the pole molding to a 5/8" × 8 ft copper-clad ground rod.', workingPrinciple: 'Clips lightning and switching overvoltages (>28 kV) directly to earth via highly nonlinear zinc-oxide varistor blocks, shunting up to 10 kA impulses away from transformer turn insulation.', maintenance: 'Check fault-indicator isolator cap at the arrester base and measure ground rod resistance (≤25 Ω per NESC Rule 94B).' },
+      'pole-shaft-ground': { ansiCode: '40 ft Class 3 Pole Shaft, Ground Wire & Butt Plate', fieldSpot: 'Treated Class 3 Douglas Fir / spun-concrete shaft planted 6.0 ft deep with plastic stapled #4 Cu ground wire down to base electrode.', workingPrinciple: 'Resists combined Grade B/C wind (90 mph NESC) and conductor tension bending moments while providing an uninterrupted earth path for pole-top hardware bonds.', maintenance: 'Sound wood poles at groundline for internal decay every 8–10 years; verify PVC molding covers the #4 Cu ground riser from grade up 8 ft.' },
+      'pole-crossarm-brace': { ansiCode: '8 ft Crossarm(s), Steel V-Braces & Lag Hardware', fieldSpot: 'Single tangent or double dead-end pressure-treated crossarm bolted at the pole gain with galvanized flat steel V-braces and square washers.', workingPrinciple: 'Maintains 30–36 in horizontal phase-to-phase air clearance (13.8 kV) and transfers transverse/longitudinal wire loads cleanly into the pole bolt.', maintenance: 'Retighten through-bolts after wood shrinkage cycles and check for split ends or rusted V-brace lag screws.' },
+      'pole-insulators': { ansiCode: 'ANSI 55-5 Pin/Post Insulators & Dead-End Strain Bells', fieldSpot: 'Ribbed porcelain/polymer insulators mounted along the top of the crossarm (tangent) or horizontal suspension bells at tap/dead-end corners.', workingPrinciple: 'Maintains ≥105 kV BIL impulse withstand between energized 13.8 kV ACSR conductors and grounded/bonded crossarm hardware under rain and fog.', maintenance: 'Binocular-inspect tie wires, armor rods, and polymer sheds for corona erosion or gunshot damage.' },
+      'pole-guy-anchor': { ansiCode: 'Down-Guy Strand, Yellow Guy Guard & Helical Anchor', fieldSpot: 'Angle-pull 3/8" EHS galvanized steel guy wire running from an eye-bolt/guy-hook near the crossarm down through an 8 ft yellow visibility guard into a screw anchor.', workingPrinciple: 'Balances unbalanced longitudinal conductor tension at dead-ends, tap corners, and heavy equipment poles so the pole shaft remains in compression rather than excessive cantilever bending.', maintenance: 'Confirm turnbuckle/preformed dead-end grip tension and verify the 8 ft bright yellow safety guard is free of brush.' },
+      'pole-spool-rack': { ansiCode: '3-Wire Secondary Spool Rack & Neutral Clevis', fieldSpot: 'Galvanized steel vertical secondary rack holding three white porcelain spools with bare ACSR neutral and insulated 120/240 V secondary conductors.', workingPrinciple: 'Carries low-voltage secondary mains and establishes the Multi-Grounded Neutral (MGN) reference tying pole grounds, transformer X₀, and customer service drops together.', maintenance: 'Check spool clevis pins and neutral compression sleeves for galvanic corrosion.' },
+      'gate-leaves': { ansiCode: 'Heavy Steel Vehicular Swing Gate & Man-Gate', fieldSpot: 'Motorized twin 3.2 m steel crash gate leaves anchored into concrete pilasters, flanked by an outward pedestrian gate.', workingPrinciple: 'Maintains continuous NERC CIP-014 & NESC Rule 110 anti-intrusion exclusion around live HV/MV equipment while swinging open 90° for crane trucks.', maintenance: 'Lubricate pintle hinges, test motorized limit switches, and verify center drop-rod alignment.' },
+      'gate-posts-barbed': { ansiCode: '3.0 m Precast Concrete Wall Pilasters & 45° Razor/Barb Arms', fieldSpot: 'Reinforced concrete columns and panels topped with 45° galvanized V-outriggers carrying 3-strand barbed wire and concertina razor coil.', workingPrinciple: 'Establishes a solid 3.55 m anti-climb ballistic/arc barrier eliminating public line-of-sight hazards per NERC CIP & NESC 110A.', maintenance: 'Inspect concrete panel joint sealants, barbed wire tension >= 150 lbf, and ANSI Z535 HV danger plaques.' },
+      'gate-guardhouse': { ansiCode: 'Security Guardhouse Booth & Card-Reader Entry Bollard', fieldSpot: 'Climate-controlled pre-fab steel/glass booth beside the driveway apron plus yellow steel card-reader pedestal reachable from truck cab height.', workingPrinciple: 'Enforces two-factor utility access control, visitor sign-in logbook, PPE inspection (FR clothing/hard hat/voltage-rated gloves), and clearance-hold verification.', maintenance: 'Test badge reader fail-secure relay, intercom link to System Control Center, and exterior floodlight photocell.' },
+      'gate-apron-ground': { ansiCode: 'Asphalt Driveway Apron & Flexible Copper Gate Ground Braids', fieldSpot: 'Paved asphalt approach tying the highway curb to the crushed-stone yard apron, plus tinned flexible copper braid straps spanning each gate hinge.', workingPrinciple: 'Supports heavy oil-filled transformer haulers (HS-20 axle load) across the ditch culvert while keeping swing gate leaves solidly bonded at <1 Ω to the buried IEEE 80 ground grid.', maintenance: 'Inspect flexible hinge copper braids for metal fatigue cracks every quarterly yard walkdown — never rely on dry hinges for fault grounding.' },
+      'city-gate-arch': { ansiCode: '6.8 m Clear Steel Boulevard Archway & District Marquee', fieldSpot: 'Spanning public highway 140 m East of Substation A at the City & URD Subdivision entrance.', workingPrinciple: 'Guarantees 140 m HV setback clearance from substation perimeter walls and maintains >6.8 m NESC/DOT heavy truck vertical clearance.', maintenance: 'Check structural anchor bolts, LED marquee visibility, and retroreflective stripes.' },
+      'city-gate-boom': { ansiCode: 'Motorized Sliding Barrier Arms & Entry Kiosk', fieldSpot: 'Bilateral yellow-striped traffic barriers flanking the highway guardhouse kiosk.', workingPrinciple: 'Restricts unauthorized non-utility vehicles entering the gated utility district; opens interactively via click or [E].', maintenance: 'Test optical safety beam sensors and manual hand-crank override.' },
+      'ind-hv-cb': { ansiCode: '52-IND Dedicated 69/138 kV Industrial Feeder SF6 Breaker', fieldSpot: 'North-East Substation A bay dead-end ahead of the private steel sub-transmission corridor.', workingPrinciple: 'Isolates heavy customer steel mill & arc-furnace faults within 2–3 cycles at 69/138 kV without disturbing city 13.8 kV feeders.', maintenance: 'Monitor SF6 pressure gauge, trip-coil continuity, and contact wear counter.' },
+      'ind-hv-ds': { ansiCode: '89-INDA / 89-INDB Industrial Feeder Isolation Disconnects', fieldSpot: 'Motor-operated center-break air disconnects flanking 52-IND.', workingPrinciple: 'Establishes visible air-gap clearance under LOTO whenever servicing 52-IND or patrolling the private North ROW.', maintenance: 'Inspect silver-plated hinge contacts and mechanical block interlocks.' },
+      'ind-hv-gantry': { ansiCode: 'North-East Industrial Sub-Transmission Takeoff Gantry & Arresters', fieldSpot: 'Galvanized steel H-frame gantry + station-class MOV arresters aimed North-East toward 52-CUST.', workingPrinciple: 'Suspends tensioned 69/138 kV ACSR sub-transmission conductors cleanly above the 3.0 m precast perimeter concrete wall.', maintenance: 'Thermographic check on dead-end compression clamps and arrester surge counters.' }
     };
 
     // 4th-Year EE Field Engineer Diagnostic Quiz Questions (FA1 & SA1 Aligned)
@@ -936,6 +1827,301 @@ def get_js_data():
           '2. Overhead Conductor: 477 kcmil ACSR "Hawk" rated 670 A continuous (or bundled twin-4/0) keeps thermal margin under N-1 feeder tie.',
           '3. Protection Coordination: ANSI 50 inst. @ 6.0 kA, ANSI 51 pickup @ 960 A (1.1x max), 79 auto-reclose shots 0.5 s / 2.0 s.'
         ]
+      },
+      ngr_01: {
+        title: 'Neutral Grounding Resistor (NGR-01, 10 Ω) Sizing',
+        dutyNormal: 'Steady Neutral Unbalance < 15 A; X0 = 0 V normal',
+        dutyFault: 'I_SLG,max = V_LN / R_ngr = 7,967 V / 10.0 Ω = 796.7 A (Limits 18.4 kA down by 95%!)',
+        steps: [
+          '1. Target Fault Limit: Select 800 A limit to prevent TR-01 core iron burning and keep step/touch safe.',
+          '2. Ohmic Sizing (IEEE C57.32): R = (13,800 / sqrt(3)) / 800 A = 9.96 Ω -> Standard 10.0 Ω stainless steel grid.',
+          '3. Thermal Duty: P = I^2 * R = 796.7^2 * 10 = 6.35 MW for 10 s -> AISI 304 alloy < 760°C max rise.',
+          '4. Ground Protection: ANSI 51G Neutral CT = 800/5 A, pickup @ 0.25x = 200 A (4:1 sensitivity margin).'
+        ]
+      },
+      sa_lv: {
+        title: '13.8 kV Secondary MOV Surge Arrester Sizing',
+        dutyNormal: 'MCOV >= (13.8 / sqrt(3)) * 1.05 = 8.37 kV -> Select 10.2 kV MCOV (12 kV Rated)',
+        dutyFault: '10 kA Clamping = 32.5 kV Peak vs 110 kV BIL -> Protective Margin = 238%',
+        steps: [
+          '1. Grounded-Wye Factor: With 10 Ω NGR, TOV during SLG approaches 1.73 pu -> choose 12 kV Duty Cycle (10.2 kV MCOV) intermediate class.',
+          '2. BIL Margin: 110 kV LV BIL / 32.5 kV discharge = 3.38x safety margin (exceeds IEEE C62.22 20% rule).'
+        ]
+      },
+      ctvt_lv: {
+        title: '13.8 kV Bus CT (2000/5 A) & VT (14.4kV/120V) Sizing',
+        dutyNormal: 'I_full = 1,744.6 A -> Select 2,000 / 5 A CT (87% continuous loading)',
+        dutyFault: 'Max Fault = 18.36 kA (45.9 A sec) @ Z_burden = 0.8 Ω -> V_req = 36.7 V << 200 V (C200)',
+        steps: [
+          '1. Ratio Match: 1,745 A secondary load fits inside 2,000 A standard frame with RF = 1.33 thermal headroom.',
+          '2. Knee Voltage Check: C200 accuracy avoids CT saturation up to 20x rated current without distorting ANSI 51 inverse timing.'
+        ]
+      },
+      ds_lv: {
+        title: '13.8 kV Secondary Disconnect Switch (89-LV) Sizing',
+        dutyNormal: '2,000 A Continuous @ 15 kV, 110 kV BIL (matches 52-LV frame)',
+        dutyFault: '80 kA Crest Momentary >= 2.6 * 18.36 kA (47.7 kA peak)',
+        steps: [
+          '1. Match 2,000 A rating of 52-LV and TR-01 ONAF2 1,745 A output.',
+          '2. Enforce mechanical/Kirk-Key interlock with 52-LV so zero-current opening holds.'
+        ]
+      },
+      cb_lv: {
+        title: '13.8 kV Main Vacuum Breaker (52-LV) Sizing',
+        dutyNormal: '2,000 A Continuous (> 1,745 A TR-01 ONAF2)',
+        dutyFault: '31.5 kA Symmetrical Interrupting (> 18.36 kA Bus Fault, +71% margin)',
+        steps: [
+          '1. Standard IEEE C37.06 Frame: 15 kV, 110 kV BIL, 2,000 A, 31.5 kA 3-cycle Vacuum.',
+          '2. Coordination Interval: Delayed 0.25 s above 52-F1/F2 instantaneous/inverse curves for full bus selectivity.'
+        ]
+      },
+      sst_100: {
+        title: '100 kVA Station Service Transformer (SST-100) Sizing',
+        dutyNormal: 'TR-01 Fans (18 kW) + HVAC (15 kW) + DC Chargers (12 kW) + Lights (10 kW) = 55 kW (64 kVA)',
+        dutyFault: '13.8 kV Primary 10E Expulsion Fuse clears 480V bolted fault (~3.7 kA) inside 0.04 s',
+        steps: [
+          '1. Load Diversification: 64 kVA connected demand -> 100 kVA standard frame leaves +56% station growth margin.',
+          '2. Dual Feed Consideration: Backed by 125 VDC 200 Ah station battery for 8-hour blackout ride-through.'
+        ]
+      },
+      cap_bank: {
+        title: '3.6 MVAR Shunt Capacitor Bank Sizing',
+        dutyNormal: 'I_cap = 3,600 kVAR / (sqrt(3) * 13.8 kV) = 150.6 A nominal (x 1.35 IEEE 18 = 203 A switch)',
+        dutyFault: 'PF lifts from 0.88 lag to 0.96 lag -> cuts feeder I^2*R losses by ~16% & raises V_bus +2.1%',
+        steps: [
+          '1. Reactive Requirement: delta_Q = 35 MW * (tan(acos 0.88) - tan(acos 0.96)) = 8.6 MVAR -> 3.6 MVAR first switched step.',
+          '2. Voltage Rise Check: delta_V % = (Q_MVAR * Z_tx %) / S_tx = (3.6 * 9.5) / 41.7 = +0.82% across TR-01 (+ feeder drop).'
+        ]
+      },
+      cb_f1: {
+        title: 'Feeder 01 Vacuum Breaker (52-F1) Sizing',
+        dutyNormal: 'Normal Split Load ~920 A (22.0 MVA) -> 1,200 A Vacuum Breaker',
+        dutyFault: '25 kA Symmetrical Interrupting (> 18.36 kA Head-End Bus Fault)',
+        steps: [
+          '1. Emergency N-1 Tie Duty: Can carry combined F1 + Sub-Zone transfer up to 1,200 A (28.7 MVA).',
+          '2. ANSI 79 Reclosing: Coordinates downstream with 79-ACR1 using 0.25 s CTI zone delay.'
+        ]
+      },
+      cb_f2: {
+        title: 'Feeder 02 Vacuum Breaker (52-F2) Sizing',
+        dutyNormal: 'Normal Split Load ~824 A (19.7 MVA) -> 1,200 A Vacuum Breaker',
+        dutyFault: '25 kA Symmetrical Interrupting (> 18.36 kA Head-End Bus Fault)',
+        steps: [
+          '1. Sized identically to 52-F1 (15 kV, 1,200 A, 25 kA) for spares interchangeability.',
+          '2. Cold-load pickup delay prevents false tripping after 30-min blackout.'
+        ]
+      },
+      dist_recloser: {
+        title: 'Line Recloser (79-ACR1) Fuse-Saving Coordination Sizing',
+        dutyNormal: 'Load through Pole 1 ~410 A -> 560 A 15.5 kV Vacuum Recloser',
+        dutyFault: '12.5 kA Sym. Rating >> 6.2 kA Pole-1 Fault -> 2x Fast (Curve A) < 100K Min Melt',
+        steps: [
+          '1. Fault Current Drop Along 477 ACSR: Line impedance limits Pole-1 3φ fault to 6.2 kA (vs 18.4 kA at bus).',
+          '2. Fuse-Saving Window (IEEE C37.48): At 3.0 kA lateral fault, 79-ACR1 Curve A (0.04 s) beats 100K Fuse Min-Melt (0.11 s), saving ~80% transient outages!',
+          '3. Permanent Fault Transfer: Curve B/C Slow shots (0.38 s) wait AFTER 100K Fuse Total Clear (0.24 s) so permanent lateral faults blow only the fuse.'
+        ]
+      },
+      dist_sectionalizer: {
+        title: 'Line Sectionalizer (34-SECT) Count & Reach Sizing',
+        dutyNormal: 'Downstream Trunk Load ~280 A -> 400 A Frame, 0 A Fault Interrupting',
+        dutyFault: 'Armed I_pickup = 160 A -> Opens strictly during Recloser Dead-Time #2 (t = 0 A)',
+        steps: [
+          '1. Selectivity Rule: Count setting = 2 fault-zero openings < 79-ACR1 4-shot lockout (leaves upstream intact!).',
+          '2. Zero-CTI Advantage: Unlike overcurrent relays, sectionalizers do not need 0.3 s vertical time gaps on congested TCC plots.'
+        ]
+      },
+      dist_fuse_cutout: {
+        title: '100K Lateral Expulsion Fuse Cutout Sizing',
+        dutyNormal: 'Lateral Commercial/Tap Peak = 65 A -> 100K Tin Link (1.5x thermal margin)',
+        dutyFault: '10 kA Asymmetrical Rating >> 3.8 kA Lateral Tap Fault',
+        steps: [
+          '1. Speed Selection (K-Type Fast Melt): K-link speed factor (~6-8) allows steep clearing curves between Recloser Curve A and Curve B.',
+          '2. Minimum-Melt vs Total-Clear Band: Checked cleanly against 79-ACR1 Curve A * 0.75 pre-load margin and Curve B.'
+        ]
+      },
+      dist_arrester: {
+        title: 'Distribution Line MOV Arrester (10 kV / 8.4 kV MCOV) Sizing',
+        dutyNormal: 'V_LG = 7.97 kV * 1.05 = 8.37 kV -> 8.4 kV MCOV (10 kV Duty Cycle)',
+        dutyFault: 'Discharge V_10kA = 31 kV Peak << 95-110 kV BIL Crossarm Insulation',
+        steps: [
+          '1. Match effectively-grounded 13.8Y/7.97 kV neutral system factor (1.25 TOV factor).',
+          '2. Direct mount within 0.3 m of transformer/recloser bushings limits surge reflection doubling.'
+        ]
+      },
+      substation_b: {
+        title: 'Substation B & FLISR Automated Tie (79-TIE) Sizing',
+        dutyNormal: 'Normally Open (0 A Transfer); Closes up to 630 A (15 MVA) on N-1 Back-Feed',
+        dutyFault: 'FLISR Restoration Window < 4.2 s (Isolates faulted zone, restores 100% healthy Commercial/Industrial load)',
+        steps: [
+          '1. Thermal Reserve: Substation B carries ~58% nominal load, leaving 17 MVA reserve capacity to pick up Feeder 01 Commercial & Industrial zones.',
+          '2. Sync & Cold-Load Check: ANSI 25 confirms dead-bus or ΔV < 5% / Δθ < 15° before 79-TIE closes automatically.'
+        ]
+      },
+      dt_res_50: {
+        title: '50 kVA Single-Phase Pole-Mounted Distribution Transformer Sizing & Protection',
+        standard: 'IEEE C57.12.20 / ANSI C37.41 / NESC Rule 232',
+        inputs: '16 Residential Homes · Connected Load: 8.5 kW/home · DF: 0.48 · PF: 0.92 lag · V₁: 7.967 kV (L-N) · V₂: 240/120 V · Z = 1.9%',
+        steps: [
+          '1. Diversified kVA Demand: S_div = (16 × 8.5 kW × 0.48) / 0.92 = 70.96 kVA ÷ Coincidence Factor (1.58) ≈ 44.9 kVA → Select next standard rating: 50 kVA.',
+          '2. Primary & Secondary Rated Currents: I₁ = 50,000 / 7,967 = 6.28 A; I₂ = 50,000 / 240 = 208.3 A (load utilization = 44.9 / 50 = 89.8%).',
+          '3. Primary Fuse Cutout Selection: 1.5 × I₁ = 9.42 A → Select 10K (or 12K cold-load) Type K expulsion link inside 15 kV, 100 A ANSI C37.41 cutout.',
+          '4. Lightning Protection & Grounding: 10 kV MOV Arrester (MCOV 8.4 kV) bonded to #4 Cu lead & 5/8" × 8 ft ground rod (R_g ≤ 25 Ω). Full-load %VD ≈ 1.85%.'
+        ]
+      },
+      dt_com_750: {
+        title: '750 kVA 3-Phase Pad-Mounted Transformer & Fuse Coordination',
+        standard: 'IEEE C57.12.34 / NEC Art. 450 / ANSI C37.47',
+        inputs: 'Commercial Plaza · Diversified Peak: 625 kVA (83.3% load) · PF: 0.90 lag · V₁: 13.8 kV (Δ) · V₂: 480Y/277 V · Z = 5.25%',
+        steps: [
+          '1. Standard Pad-Mount Selection: Peak 625 kVA × 1.15 growth margin = 718.8 kVA → Select 750 kVA, ONAN 65°C rise, Dyn11 dead-front padmount.',
+          '2. Rated Line Currents: I₁ = 750 / (√3 × 13.8) = 31.38 A; I₂ = 750 / (√3 × 0.48) = 902.1 A.',
+          '3. Overcurrent Protection (NEC 450.3): Bay-O-Net Dual-Sensing + ELSP current-limiting fuse at 1.4 × I₁ = 43.9 A → 45 A / 50E fuse; Secondary Main = 1,200 A frame AT (1,000 A trip).',
+          '4. Available Symmetrical Fault Current: I_sc2 ≈ I₂ / Z_pu = 902.1 / 0.0525 = 17.18 kA sym (requires ≥25 kAIC commercial switchboard).'
+        ]
+      },
+      dt_ind_1500: {
+        title: 'Dedicated 69 / 138 kV Customer Industrial Substation (25 MVA · 52-CUST)',
+        standard: 'IEEE C57.12.10 / IEEE 141 (Red Book) / IEEE C37.113',
+        inputs: 'Steel Mill & Arc-Furnace Complex · 22.4 MVA Peak · V₁: 69 or 138 kV Dedicated Sub-Transmission → V₂: 4.16 kV / 13.8 kV Plant Switchgear · Z = 8.5%',
+        steps: [
+          '1. Dedicated Sub-Transmission Feed (52-IND): Heavy Industrial flicker/arc-furnace surges are segregated onto 69 kV (Tiers 1–2) or 138 kV (Tiers 3–4) so 13.8 kV city residential/hospital voltage remains strictly <= 0.5% flicker.',
+          '2. Line Currents @ 25 MVA: At 69 kV: I_HV = 25,000 / (√3 × 69) = 209.2 A; At 138 kV: I_HV = 104.6 A; Plant 4.16 kV bus: I_LV = 3,470 A.',
+          '3. Customer Protection (52-CUST & 87T): 69/138 kV SF6 breaker + percentage differential 87T + 51-CUST pickup = 260 A (69 kV eq), CTI >= 0.35 s below utility 52-IND.',
+          '4. Short-Circuit Withstand: Plant 4.16 kV symmetrical fault = 3,470 / 0.085 = 40.8 kA -> Specify 50 kAIC metal-clad vacuum switchgear.'
+        ]
+      },
+      ind_hv_bay: {
+        title: '52-IND Sub-Transmission Industrial Bay Sizing (69 / 138 kV)',
+        standard: 'IEEE C37.04 / IEEE Std 1427 / IEC 62271-100',
+        inputs: 'Dedicated Customer Tap off 69 or 138 kV Substation A Bus · 25 MVA Contract Demand · #477 kcmil ACSR "Hawk" Line',
+        steps: [
+          '1. Continuous Rating: I_load = 209.2 A (@ 69 kV) -> #477 ACSR rated 670 A provides >3.2x ampacity margin; bay breaker 52-IND rated 1,200 A / 31.5–40 kA.',
+          '2. Line Distance Relay (21-IND): Zone 1 = 80% of North ROW line impedance (instantaneous), Zone 2 = 120% overlapping 52-CUST primary winding.',
+          '3. Overcurrent Backup (51-IND): Pickup = 320 A @ 69 kV eq, IEEE Very Inverse, TDS 2.6, selectively coordinated >= 0.35 s above customer 52-CUST.'
+        ]
+      },
+      dt_uni_500: {
+        title: '500 kVA East Campus & Residential Pad-Mount (Sub B · 52-F3)',
+        standard: 'IEEE C57.12.34 / IEEE 1547 / NEC Art. 450',
+        inputs: 'University Hall + Library + Apartments · 410 kVA Diversified · V₁: 13.8 kV (52-F3) -> V₂: 208Y/120 V · Z = 4.9%',
+        steps: [
+          '1. Ampacity Selection: I₁ = 20.9 A @ 13.8 kV; I₂ = 1,388 A @ 208 V -> 500 kVA padmount runs at 82% load with roof PV shaving ~65 kVA midday.',
+          '2. Protection & Tie Transfer: Bay-O-Net 30 A dual-sensing + 40E ELSP fuse; Loop 1 FLISR closes 79-TIE1 if Sub B F3 loses source.'
+        ]
+      },
+      dt_mun_1000: {
+        title: '1,000 kVA Municipal Water & Logistics Station (Sub B · 52-F4)',
+        standard: 'IEEE C57.12.34 / NFPA 20 / IEEE 519 Harmonics',
+        inputs: 'Booster Pumps (4×175 HP VFD) + Logistics Hub · 820 kVA · V₁: 13.8 kV (52-F4) -> V₂: 480Y/277 V · Z = 5.5%',
+        steps: [
+          '1. Primary & Secondary Currents: I₁ = 41.8 A @ 13.8 kV; I₂ = 1,203 A @ 480 V (I_sc2 = 21.9 kA sym).',
+          '2. Critical Water Pumping Transfer: Loop 2 tie 89-TIE2 restores municipal pumping cleanly from Sub A 52-F2 under N-1 contingency.'
+        ]
+      },
+      substation_gate: {
+        title: '3.0 m Precast Concrete Perimeter Security Wall & NERC CIP Checks',
+        standard: 'NERC CIP-014 / NESC Rule 110.A1 / IEEE Std 80',
+        inputs: '3.0 m Precast Concrete Panels + 0.55 m 45° Razor/Barb Arms · Yard Ground Grid Rg < 1.0 Ohm',
+        steps: [
+          '1. Height Verification: 3.0 m concrete + 0.55 m angled barbed/razor arms = 3.55 m (11.6 ft) >> 2.13 m (7 ft) NESC Rule 110 minimum.',
+          '2. Step & Touch Bonding: Hinged steel gates bonded via 4/0 Cu braids to 1.0 m setback ground loop (<50 V touch under 19.8 kA SLG).'
+        ]
+      },
+      city_gate: {
+        title: '140 m Buffer Setback & Urban Entrance Portal Clearances',
+        standard: 'NESC C2 Rule 232 / OSHA 1910.303 Utility ROW',
+        inputs: 'West ROW Buffer = 140.0 m | East ROW Buffer = 140.0 m | Boulevard Archway Clear Height = 6.8 m',
+        steps: [
+          '1. Safety Buffer Corridor: Keeping both substations 140.0 m clear of public buildings eliminates blast-radius, EM field, and acoustic transformer noise complaints.',
+          '2. Vertical Truck Envelope: 6.8 m steel portal clears legal 4.15 m tractor-trailers and line bucket trucks with 2.65 m safety margin.'
+        ]
+      },
+      dist_pole_p1: {
+        title: 'Pole P1 — Feeder Takeoff & Tangent Overhead Design',
+        standard: 'NESC Rule 232 / Rule 250B / ANSI O5.1',
+        inputs: '40 ft Class 3 Pole · 3× #2/0 ACSR Quail + #1/0 Neutral · Span: 55 m · Conductor Tension: 4.8 kN · w = 2.71 N/m',
+        steps: [
+          '1. Embedment Depth Rule of Thumb: D = 0.10 × L + 2.0 ft = 0.10(40) + 2.0 = 6.0 ft (1.83 m); above-grade height = 34.0 ft (10.36 m).',
+          '2. Midspan Sag & Roadway Clearance: S = w·L² / (8·T) = (2.71 × 55²) / (8 × 4,800) = 0.214 m (0.70 ft); Minimum phase height = 9.45 m − 0.21 m = 9.24 m >> 5.64 m NESC 18.5 ft highway limit.',
+          '3. Double Crossarm Bending Check: Horizontal pin spacing = 0.90 m (35.4 in) ≥ 30 in minimum for 13.8 kV.',
+          '4. Pole Grounding Electrode: Continuous #4 Cu riser stapled under PVC molding bonded to 5/8" × 8 ft butt ground (R_g ≤ 25 Ω).'
+        ]
+      },
+      dist_pole_p2: {
+        title: 'Pole P2 — Residential 50 kVA Transformer Tap & Down-Guy Statics',
+        standard: 'NESC Rule 250 / Rule 261C / RUS 1728F-803',
+        inputs: '40 ft Class 3 Pole · Equipment Weight: 335 kg · Tap Pull: 5.0 kN at 9.1 m height · Anchor Lead: 4.2 m',
+        steps: [
+          '1. Vertical Buckling Load: W_equip = 335 kg × 9.81 = 3.29 kN vertical cantilever + ice/wind moment comfortably within Class 3 13.3 kN horizontal rating.',
+          '2. Down-Guy Angle & Tension: θ_guy = arctan(4.2 / 9.1) = 24.8° from pole axis; T_guy = T_tap / sin(24.8°) = 5.0 / 0.419 = 11.93 kN.',
+          '3. Guy Strand Factor of Safety: 3/8" EHS 7-strand galvanized steel UTS = 68.5 kN → SF = 68.5 / 11.93 = 5.74 (passes NESC Grade B SF ≥ 2.0).',
+          '4. Cutout & Arrester Separation: Primary riser tap cleared ≥0.45 m above X₁/X₂ secondary spool rack.'
+        ]
+      },
+      dist_pole_p3: {
+        title: 'Pole P3 — Commercial Pad-Mount Underground Riser Dip Pole',
+        standard: 'NESC Rule 239 / IEEE 404 (15 kV Terminations)',
+        inputs: '40 ft Class 3 Dead-End Pole · 3× 1/C #1/0 Cu 15 kV EPR-JCN Cable in 4" RGS Riser · Bend Radius ≥ 12×OD',
+        steps: [
+          '1. Dead-End Bell Tension: Full line tension (~3 × 4.8 kN = 14.4 kN) transferred via double crossarm & polymer dead-end insulators.',
+          '2. Riser Arrester Protection: 10 kV riser-pole MOV arresters mounted immediately above heat-shrink potheads to protect underground cable from traveling-wave doubling.',
+          '3. Conduit Mechanical Protection: Galvanized rigid steel (RGS) U-guard & schedule-80 sweep elbow extend ≥2.5 m (8 ft) above grade.',
+          '4. Guying Balance: Opposing 3/8" EHS down-guy anchored 4.4 m back into Grade-A helical screw anchor.'
+        ]
+      },
+      dist_pole_p4: {
+        title: 'Pole P4 — Industrial Corner & 79-TIE Span Termination',
+        standard: 'NESC Grade B Heavy Loading / IEEE 1366 FLISR',
+        inputs: '40 ft Class 3 Double-Arm Corner Pole · Span to 79-TIE: 52 m · Faulted Line Sectionalizing Boundary',
+        steps: [
+          '1. Dead-End Strain Assembly: Double crossarms carry back-to-back dead-end strain bells separating the Feeder 01 main trunk from Industrial Tap & Normally Open 79-TIE.',
+          '2. Longitudinal Balancing: Corner resultant pull neutralized by 3/8" EHS guy strand + 8 ft high-visibility yellow guy guard.',
+          '3. FLISR Sectionalizing Clearance: Phase spacing opened to 1.00 m on outer arm ends for hot-line bucket truck / live-line work clearance.',
+          '4. NESC Vertical Clearance: Lowest neutral spool maintained ≥7.2 m above industrial entrance road grade.'
+        ]
+      },
+      substation_gate: {
+        title: 'Substation Perimeter Vehicular Gate, Guardhouse & Touch-Potential Bonding',
+        standard: 'NESC Rule 110A / IEEE Std 80 Section 16.5 / ANSI Z535',
+        inputs: '7.2 m Double-Leaf Swing Gate + 1.1 m Man-Gate · Fabric: 7 ft (2.13 m) Chain Link + 1 ft Barbed Wire · Ground Grid Tie',
+        steps: [
+          '1. NESC Rule 110A Fence Height Check: 2.13 m (7.0 ft) chain-link fabric + 0.35 m (1.15 ft) 45° 3-strand barbed outrigger = 2.48 m (8.1 ft) ≥ 7.0 ft minimum requirement.',
+          '2. Vehicular Access Clearance: Twin 3.6 m leaves open to full 7.2 m clear width — accommodates 100+ MVA lowboy transformer trailers and 55 ft utility bucket trucks.',
+          '3. IEEE 80 Flexible Hinge Grounding: Each gate leaf is bonded across its pintle hinges by ≥#2 AWG (or 2/0 equiv.) tinned flexible copper braid to the fence post ground grid riser, keeping gate touch potential V_touch < V_tolerable.',
+          '4. Apron & Crushed Stone Transition: 100 mm high-resistivity (3,000 Ω·m) clean crushed granite layer extends ≥1.0 m beyond the fence perimeter at pedestrian zones.'
+        ]
+      },
+      urd_riser_pole: {
+        title: 'URD Transition (Dip / Riser) Pole Travel-Wave & Conduit Design',
+        standard: 'IEEE Std 48 / IEEE C62.11 / NESC Rule 239',
+        inputs: '13.8 kV URD Lateral · 3× #1/0 Al 15 kV 100% TR-XLPE Concentric Neutral · Z₀_oh = 400 Ω, Z₀_ug = 38 Ω',
+        steps: [
+          '1. Traveling-Wave Doubling at Open Loop Tie: Lightning impulse entering cable sees Z₀_ug = 38 Ω; at normally-open H1B elbow end reflection coeff Γ = +1.0 doubles surge crest.',
+          '2. Riser Arrester Discharge Voltage: 10 kV Heavy-Duty Riser Arrester (8.4 kV MCOV) holds 28.5 kV @ 10 kA; doubled crest = 57.0 kV << 95 kV BIL (40% insulation margin).',
+          '3. Ampacity & Conduit Fill: 3× #1/0 Al (1.06" OD) inside 4" Schedule 80 RGS riser = 21.8% fill < 40% NEC Ch.9 limit with 24" minimum sweep radius.',
+          '4. Primary Lateral Fusing: 65T / 80K cutout coordinated below 79-ACR1 slow curve.'
+        ]
+      },
+      dt_urd_pad: {
+        title: '150 kVA Dead-Front Loop-Feed URD Pad-Mounted Transformer & Bay-O-Net Check',
+        standard: 'IEEE C57.12.26 / IEEE 386 / NEC Art. 450',
+        inputs: '24 URD Subdivision Homes · 12 kW/home × 0.42 DF ÷ 0.90 PF = 134.4 kVA · V₁ = 7.97 kV L-N / 13.8 kV · V₂ = 240/120 V',
+        steps: [
+          '1. Standard Dead-Front Rating: Peak diversified load 134.4 kVA / 150 kVA = 89.6% loading (65°C FR3 fluid rise compliant).',
+          '2. Primary & Loop-Feed Loadbreak Rating: I₁ = 150,000 / 7,967 = 18.8 A (1φ equiv.) or 6.28 A/φ << 200 A IEEE 386 elbow continuous & loop switching rating.',
+          '3. Dual-Element Protection: 25 A Bay-O-Net Dual-Sensing expulsion fuse backed up by 40 A partial-range current-limiting ELSP fuse.',
+          '4. Underground Service Drop Drop: #4/0 Al USE-2 sweetbriar triplex in 2" HDPE duct to URD street pedestals yields ΔV = 1.92% < 3% utility service limit.'
+        ]
+      },
+      urd_vista_swgr: {
+        title: 'Pad-Mounted SF6 / Solid-Dielectric Vista Switchgear Sectionalizing & Loop Check',
+        standard: 'IEEE C37.74 / IEEE 386 (600 A T-Body + 200 A VFI)',
+        inputs: '600 A Main Loop Bus · 2× 200 A Vacuum Fault Interrupter Ways · Isc = 11.4 kA sym',
+        steps: [
+          '1. 600 A T-Body Main Bus Capacity: Carries up to 14.3 MVA @ 13.8 kV with zero exposed live metal inside vault.',
+          '2. Vacuum Fault Interrupter TCC Curve: Electronic trip set to E-Curve Equivalent (Pickup 140 A, Instantaneous 1,200 A) clearing downstream URD cable faults in < 35 ms.',
+          '3. Visible Break Verification: Illuminated viewing window confirms Open-Closed-Ground switch blade status before applying grounded test leads.'
+        ]
       }
     };
 
@@ -1005,10 +2191,19 @@ def get_js_data():
       '69_13': {
         id: '69_13',
         shortLabel: '69 / 13.8 kV',
-        tierName: 'Distribution Substation',
+        cascadeLabel: '69 → 13.8 kV',
+        stageKvs: [69.0, 13.8],
+        distKv: 13.8,
+        indSubKv: 69.0,
+        indCustMva: 25.0,
+        tierName: 'Distribution Substation (1-Stage Step-Down)',
         hvKv: 69.0,
         lvKv: 13.8,
         mva: 41.7,
+        stages: [
+          { name: 'TR-01', hv: 69.0, lv: 13.8, mva: 41.7, vector: 'Dyn11', xPu: 0.105 }
+        ],
+        totalCascadeXPu: 0.105,
         bilHv: '350 kV',
         bilLv: '110 kV',
         phaseSpacing: 2.4,
@@ -1036,11 +2231,21 @@ def get_js_data():
       },
       '138_69': {
         id: '138_69',
-        shortLabel: '138 / 69 kV',
-        tierName: 'Sub-Transmission Substation',
+        shortLabel: '138 → 69 → 13.8 kV',
+        cascadeLabel: '138 → 69 → 13.8 kV',
+        stageKvs: [138.0, 69.0, 13.8],
+        distKv: 13.8,
+        indSubKv: 69.0,
+        indCustMva: 25.0,
+        tierName: 'Sub-Transmission Cascade (2-Stage: 138→69→13.8 kV)',
         hvKv: 138.0,
         lvKv: 69.0,
         mva: 100.0,
+        stages: [
+          { name: 'ATR-138', hv: 138.0, lv: 69.0, mva: 100.0, vector: 'YNa0d1', xPu: 0.115 },
+          { name: 'TR-01', hv: 69.0, lv: 13.8, mva: 41.7, vector: 'Dyn11', xPu: 0.105 }
+        ],
+        totalCascadeXPu: 0.153,
         bilHv: '650 kV',
         bilLv: '350 kV',
         phaseSpacing: 3.2,
@@ -1068,11 +2273,22 @@ def get_js_data():
       },
       '230_138': {
         id: '230_138',
-        shortLabel: '230 / 138 kV',
-        tierName: 'EHV Bulk Transmission Substation',
+        shortLabel: '230 → 138 → 69 → 13.8 kV',
+        cascadeLabel: '230 → 138 → 69 → 13.8 kV',
+        stageKvs: [230.0, 138.0, 69.0, 13.8],
+        distKv: 13.8,
+        indSubKv: 138.0,
+        indCustMva: 30.0,
+        tierName: 'EHV Bulk Transmission Cascade (3-Stage: 230→138→69→13.8 kV)',
         hvKv: 230.0,
         lvKv: 138.0,
         mva: 300.0,
+        stages: [
+          { name: 'ATR-230', hv: 230.0, lv: 138.0, mva: 300.0, vector: 'YNa0d1', xPu: 0.125 },
+          { name: 'ATR-138', hv: 138.0, lv: 69.0, mva: 100.0, vector: 'YNa0d1', xPu: 0.115 },
+          { name: 'TR-01', hv: 69.0, lv: 13.8, mva: 41.7, vector: 'Dyn11', xPu: 0.105 }
+        ],
+        totalCascadeXPu: 0.170,
         bilHv: '1050 kV',
         bilLv: '650 kV',
         phaseSpacing: 4.8,
@@ -1084,6 +2300,7 @@ def get_js_data():
         mad: 4.6,
         coronaRings: true,
         twinBundle: true,
+        quadBundle: false,
         hvCbKa: 50.0,
         lvCbKa: 40.0,
         rPu: 0.0045,
@@ -1097,6 +2314,53 @@ def get_js_data():
         capMvar: 30.0,
         vectorGroup: 'YNa0d1 (Autotransformer)',
         arcClearingSec: 0.05
+      },
+      '500_230': {
+        id: '500_230',
+        shortLabel: '500 → 230 → 138 → 69 → 13.8 kV',
+        cascadeLabel: '500 → 230 → 138 → 69 → 13.8 kV',
+        stageKvs: [500.0, 230.0, 138.0, 69.0, 13.8],
+        distKv: 13.8,
+        indSubKv: 138.0,
+        indCustMva: 30.0,
+        tierName: 'EHV Bulk Grid Cascade (4-Stage: 500→230→138→69→13.8 kV)',
+        hvKv: 500.0,
+        lvKv: 230.0,
+        mva: 1000.0,
+        stages: [
+          { name: 'ATR-500', hv: 500.0, lv: 230.0, mva: 1000.0, vector: 'YNa0d11', xPu: 0.138 },
+          { name: 'ATR-230', hv: 230.0, lv: 138.0, mva: 300.0, vector: 'YNa0d1', xPu: 0.125 },
+          { name: 'ATR-138', hv: 138.0, lv: 69.0, mva: 100.0, vector: 'YNa0d1', xPu: 0.115 },
+          { name: 'TR-01', hv: 69.0, lv: 13.8, mva: 41.7, vector: 'Dyn11', xPu: 0.105 }
+        ],
+        totalCascadeXPu: 0.176,
+        bilHv: '1800 kV',
+        bilLv: '1050 kV',
+        phaseSpacing: 8.2,
+        minPhaseClearance: 4.8,
+        bayPhaseZ: 8.6,
+        insScale: 3.45,
+        shedsCount: 36,
+        hvShedsCount: 38,
+        mad: 8.2,
+        coronaRings: true,
+        twinBundle: true,
+        quadBundle: true,
+        autoTxBank: true,
+        liveTankMultiChamber: true,
+        hvCbKa: 63.0,
+        lvCbKa: 50.0,
+        rPu: 0.0028,
+        xPu: 0.138,
+        pCoreKw: 310.0,
+        pCuFullKw: 1850.0,
+        z1SysPu: 0.015,
+        z0SysPu: 0.022,
+        z0TxPu: 0.115,
+        ngrOhms: 60.0,
+        capMvar: 90.0,
+        vectorGroup: 'YNa0d11 (3×333 MVA 1φ AutoTx Bank)',
+        arcClearingSec: 0.033
       }
     };
     """

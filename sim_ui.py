@@ -25,57 +25,39 @@ def get_html_ui():
   <!-- TOP HEADER -->
   <header id="top-bar">
     <div class="brand">
-      <div class="brand-badge">USeP BSEE</div>
-      <div class="brand-title" title="EE 415: 3D Substation Field Immersion & Exploded-View Simulator — Distribution Systems & Substation Design | Regional Substation Obrero (69 kV / 13.8 kV, 41.7 MVA Dyn11)">
-        <h1>EE 415: 3D Substation Field Immersion & Exploded-View Simulator</h1>
-        <p id="subtitle-rating" title="Distribution Systems & Substation Design | Regional Substation Obrero (69 kV / 13.8 kV, 41.7 MVA Dyn11)">Distribution Systems & Substation Design | Regional Substation "Obrero" (69 kV / 13.8 kV, 41.7 MVA Dyn11)</p>
+      <div class="brand-badge" title="High-Voltage Power &amp; Distribution Engineering Emblem">
+        <svg class="brand-emblem-svg" width="32" height="32" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Electrical Engineering Shield Emblem">
+          <polygon points="18,2 32,9 32,25 18,34 4,25 4,9" fill="rgba(2,6,23,0.85)" stroke="#38bdf8" stroke-width="1.6"/>
+          <path d="M18 5 L14 27 M18 5 L22 27 M11.5 11.5 H24.5 M12.5 16.5 H23.5" stroke="#94a3b8" stroke-width="1.2" stroke-linecap="round"/>
+          <path d="M6 21 C9 15, 12 27, 15 21 C18 15, 21 27, 24 21 C27 15, 29 24, 30 21" stroke="#34d399" stroke-width="1.4" stroke-linecap="round"/>
+          <circle cx="13" cy="21" r="3.4" stroke="#38bdf8" stroke-width="1.2" stroke-opacity="0.8"/>
+          <circle cx="23" cy="21" r="3.4" stroke="#38bdf8" stroke-width="1.2" stroke-opacity="0.8"/>
+          <polygon points="19.5,6.5 13.5,18.5 18,18.5 16,28.5 23.5,15.5 18.8,15.5" fill="#fbbf24" stroke="#0f172a" stroke-width="0.6"/>
+        </svg>
+      </div>
+      <div class="brand-title" title="Substation and Distribution Simulation — High-Voltage Switchyard, Protection Coordination &amp; Distribution Network Simulator (69 / 13.8 kV, 41.7 MVA Dyn11)">
+        <h1>Substation and Distribution Simulation</h1>
+        <p id="subtitle-rating" title="High-Voltage Switchyard, Protection Coordination &amp; Distribution Network Simulator | 69 / 13.8 kV, 41.7 MVA Dyn11">High-Voltage Switchyard &amp; Distribution Simulator | 69 / 13.8 kV, 41.7 MVA Dyn11</p>
       </div>
     </div>
 
-    <!-- Live Telemetry Bar (Non-wrapping digital meter pills) -->
-    <div class="telemetry-bar">
-      <div class="telem-chip">
+    <!-- Compact Grid Status Pill + Telemetry Drawer Trigger -->
+    <div class="telem-compact-bar">
+      <div class="grid-status-pill" id="telem-compact-pill">
         <div class="dot pulse" id="telem-grid-dot"></div>
-        <span class="label">GRID:</span>
-        <span class="val" id="telem-grid-status">ENERGIZED</span>
+        <span id="telem-compact-summary">GRID: <span id="telem-grid-status">ENERGIZED</span> | <span id="telem-compact-kv">69/13.8 kV</span></span>
       </div>
-      <div class="telem-voltage-card">
-        <div class="vpill vpill-hv">
-          <span>HV</span>
-          <span id="telem-hv-voltage">69.0 kV</span>
-          <span class="vpill-pu" id="telem-hv-pu">(1.00 pu)</span>
-        </div>
-        <div class="vpill vpill-lv">
-          <span>LV</span>
-          <span id="telem-lv-voltage">13.80 kV</span>
-          <span class="vpill-pu" id="telem-lv-pu">(1.00 pu)</span>
-        </div>
-        <span class="vr-badge" id="telem-vr">VR 0.0%</span>
-      </div>
-      <div class="telem-chip">
-        <span class="label">CURRENT:</span>
-        <span class="val" id="telem-current">348.9 / 1744 A</span>
-      </div>
-      <div class="telem-chip">
-        <span class="label">LOAD:</span>
-        <span class="val" id="telem-power">41.7 MVA | PF 0.92</span>
-      </div>
-      <div class="telem-chip">
-        <span class="label">FREQ / Rg:</span>
-        <span class="val" style="color: #10b981;">60.0 Hz | 0.842 Ω</span>
-      </div>
-      <div class="telem-chip" title="Total Civil Substation Land Footprint (Width × Length | Area)">
-        <span class="label">LAND:</span>
-        <span class="val" id="telem-land-area" style="color: #fbbf24;">68×48m | 3,264 m² (0.33 ha)</span>
-      </div>
+      <button id="btn-telem-drawer" onclick="toggleLiveTelemetryDrawer()" title="Toggle Live System Telemetry & Grid Metrics Dashboard">
+        ⚡ System Telemetry &amp; Grid Metrics ▾
+      </button>
     </div>
 
     <div class="header-actions">
       <button class="btn" id="btn-open-analysis" onclick="openAnalysisModal('pf')" style="background: rgba(14, 165, 233, 0.22); border-color: #38bdf8; color: #bae6fd;">
-        📊 Power Flow & Fault Lab
+        📊 Power Flow &amp; Fault Lab
       </button>
       <button class="btn" id="btn-open-tcc" onclick="openAnalysisModal('tcc')" style="background: rgba(16, 185, 129, 0.22); border-color: #10b981; color: #a7f3d0;">
-        🛡️ Relay & TCC Lab
+        🛡️ Relay &amp; TCC Lab
       </button>
       <button class="btn" id="btn-open-pq" onclick="openAnalysisModal('pq')" style="background: rgba(168, 85, 247, 0.22); border-color: #c084fc; color: #e9d5ff;">
         📈 Power Quality Lab
@@ -93,6 +75,57 @@ def get_html_ui():
     </div>
   </header>
 
+  <!-- FLOATING LIVE SYSTEM TELEMETRY & GRID METRICS POP-UP DRAWER -->
+  <section id="live-telemetry-drawer" aria-label="Live Substation Telemetry Dashboard">
+    <div class="telem-drawer-header">
+      <div class="telem-drawer-title">
+        <span>⚡ Live Substation &amp; Distribution System Telemetry</span>
+        <span class="vr-badge" id="telem-vr">VR 0.0%</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <button class="btn" onclick="openAnalysisModal('pf')" style="padding:3px 9px; font-size:10px; border-color:#38bdf8; color:#bae6fd;">Open PF Lab</button>
+        <button class="btn" onclick="toggleLiveTelemetryDrawer(false)" style="padding:3px 9px; font-size:10px;">✕ Close</button>
+      </div>
+    </div>
+    <div class="telem-drawer-grid">
+      <div class="telem-metric-card hv">
+        <span class="lbl">Primary HV Bus Voltage</span>
+        <span class="val" id="telem-hv-voltage">69.0 kV</span>
+        <span class="sub"><span id="telem-hv-pu">(1.00 pu)</span> &bull; IEEE C84.1 Range A</span>
+      </div>
+      <div class="telem-metric-card lv">
+        <span class="lbl">Secondary LV Bus Voltage</span>
+        <span class="val" id="telem-lv-voltage">13.80 kV</span>
+        <span class="sub"><span id="telem-lv-pu">(1.00 pu)</span> &bull; OLTC Regulated</span>
+      </div>
+      <div class="telem-metric-card hv">
+        <span class="lbl">HV / LV Transformer Currents</span>
+        <span class="val" id="telem-current">348.9 / 1744 A</span>
+        <span class="sub" id="telem-phase-split">3&phi; Balanced &bull; TR-01 Loading</span>
+      </div>
+      <div class="telem-metric-card lv">
+        <span class="lbl">Feeders F1 / F2 &amp; Tie Current</span>
+        <span class="val" id="telem-feeder-currents">F1: 920 A | F2: 824 A</span>
+        <span class="sub" id="telem-tie-status">79-TIE (Sub B): OPEN (0 A)</span>
+      </div>
+      <div class="telem-metric-card pwr">
+        <span class="lbl">Apparent Power &amp; PF</span>
+        <span class="val" id="telem-power">41.7 MVA | PF 0.92</span>
+        <span class="sub" id="telem-mw-mvar">P = 38.4 MW | Q = +16.3 MVAR</span>
+      </div>
+      <div class="telem-metric-card gnd">
+        <span class="lbl">Frequency &amp; Ground Resistance</span>
+        <span class="val" id="telem-freq-rg" style="color:#34d399;">60.00 Hz | 0.842 &Omega;</span>
+        <span class="sub" id="telem-gpr-live">Live GPR: 18 V (IEEE 80 Safe)</span>
+      </div>
+      <div class="telem-metric-card pwr">
+        <span class="lbl">Civil Substation Footprint</span>
+        <span class="val" id="telem-land-area" style="color:#fbbf24;">68&times;48m | 3,264 m&sup2; (0.33 ha)</span>
+        <span class="sub" id="telem-footprint-note">Fenced Yard + Outgoing Feeders</span>
+      </div>
+    </div>
+  </section>
+
   <!-- LEFT DOCK: NAVIGATION, BUSBAR SELECTION, SIMULATION -->
   <aside id="left-dock">
     <!-- Camera & Bay Presets -->
@@ -105,9 +138,9 @@ def get_html_ui():
       </div>
       <div class="preset-grid">
         <button class="btn-preset active" onclick="setCameraPreset('overview')">Yard Overview</button>
-        <button class="btn-preset" onclick="setCameraPreset('gantry')">1. Gantry & Lines</button>
+        <button class="btn-preset" onclick="setCameraPreset('gantry')">1. Gantry &amp; Lines</button>
         <button class="btn-preset" onclick="setCameraPreset('arrester')">2. Surge Arrester</button>
-        <button class="btn-preset" onclick="setCameraPreset('ctvt')">3. CT & VT Bay</button>
+        <button class="btn-preset" onclick="setCameraPreset('ctvt')">3. CT &amp; VT Bay</button>
         <button class="btn-preset" onclick="setCameraPreset('disconnect')">4. Disconnect (89)</button>
         <button class="btn-preset" onclick="setCameraPreset('breaker')">5. SF6 Breaker (52)</button>
         <button class="btn-preset" onclick="setCameraPreset('transformer')">6. Transformer (TR-1)</button>
@@ -115,7 +148,10 @@ def get_html_ui():
         <button class="btn-preset" onclick="setCameraPreset('control')">8. Control House</button>
         <button class="btn-preset" onclick="setCameraPreset('ground')">9. Ground Grid X-Ray</button>
         <button class="btn-preset" onclick="setCameraPreset('secondary')">10. 13.8 kV Secondary</button>
-        <button class="btn-preset" onclick="setCameraPreset('feeders')">11. Feeders 01 & 02</button>
+        <button class="btn-preset" onclick="setCameraPreset('feeders')">11. Feeders 01 &amp; 02</button>
+        <button class="btn-preset" onclick="setCameraPreset('recloser')">12. Recloser &amp; Sect.</button>
+        <button class="btn-preset" onclick="setCameraPreset('cutout_loads')">13. Cutout &amp; Dist. Xfmrs</button>
+        <button class="btn-preset" onclick="setCameraPreset('substation_b')">14. Tie &amp; Substation B</button>
       </div>
     </div>
 
@@ -131,6 +167,20 @@ def get_html_ui():
         <span class="toggle-label">1st-Person Field Walk (1.75m)</span>
         <label class="switch">
           <input type="checkbox" id="toggle-walk-mode" onchange="toggleWalkMode(this.checked)">
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="toggle-row">
+        <span class="toggle-label">Substation A, B &amp; City Gates (Open / [E])</span>
+        <label class="switch">
+          <input type="checkbox" id="toggle-sub-gates" onchange="toggleSubstationGate('both', this.checked)">
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="toggle-row">
+        <span class="toggle-label">Concrete Perimeter Wall Cutaway (Low View)</span>
+        <label class="switch">
+          <input type="checkbox" id="toggle-wall-cutaway" onchange="togglePerimeterWallCutaway(this.checked)">
           <span class="slider"></span>
         </label>
       </div>
@@ -162,6 +212,13 @@ def get_html_ui():
           <span class="slider"></span>
         </label>
       </div>
+      <div class="toggle-row">
+        <span class="toggle-label">URD Underground Cables X-Ray</span>
+        <label class="switch">
+          <input type="checkbox" id="toggle-urd-xray" checked onchange="toggleUrdTrenchXray(this.checked)">
+          <span class="slider"></span>
+        </label>
+      </div>
     </div>
 
     <!-- Substation Voltage Class (kV Scale) Selector -->
@@ -169,26 +226,50 @@ def get_html_ui():
       <div class="card-header">
         <div class="card-title" style="color: #38bdf8;">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-          Substation Voltage Class (kV Scale)
+          Cascading Voltage Step-Down Chain
         </div>
       </div>
       <div class="bus-selector">
         <div class="bus-option selected" id="vclass-opt-69_13" onclick="setVoltageClass('69_13')">
-          <span>69 / 13.8 kV (41.7 MVA)</span>
-          <span class="bus-badge">BIL 350 kV</span>
+          <span>69 &rarr; 13.8 kV (1-Stage)</span>
+          <span class="bus-badge">350 kV BIL</span>
         </div>
         <div class="bus-option" id="vclass-opt-138_69" onclick="setVoltageClass('138_69')">
-          <span>138 / 69 kV (100 MVA)</span>
-          <span class="bus-badge">BIL 650 kV</span>
+          <span>138 &rarr; 69 &rarr; 13.8 kV (2-Stg)</span>
+          <span class="bus-badge">650 kV BIL</span>
         </div>
         <div class="bus-option" id="vclass-opt-230_138" onclick="setVoltageClass('230_138')">
-          <span>230 / 138 kV (300 MVA)</span>
-          <span class="bus-badge">BIL 1050 kV</span>
+          <span>230 &rarr; 138 &rarr; 69 &rarr; 13.8 kV</span>
+          <span class="bus-badge">1050 kV BIL</span>
+        </div>
+        <div class="bus-option" id="vclass-opt-500_230" onclick="setVoltageClass('500_230')">
+          <span>500&rarr;230&rarr;138&rarr;69&rarr;13.8 kV</span>
+          <span class="bus-badge">1800 kV BIL</span>
         </div>
       </div>
       <button class="btn" style="width: 100%; justify-content: center; margin-top: 8px; font-size: 10.5px;" onclick="openVoltageClassModal()">
-        📏 Voltage Scaling & Clearances (IEEE 1427)
+        📏 Cascading Tiers &amp; Clearances (IEEE 1427)
       </button>
+    </div>
+
+    <!-- Target Substation Selector (Independent Customization for Main A vs Tie B) -->
+    <div class="dock-card">
+      <div class="card-header">
+        <div class="card-title" style="color: #10b981;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="8" height="16" rx="1"/><rect x="14" y="4" width="8" height="16" rx="1"/><path d="M10 12h4"/></svg>
+          Target Substation (A vs. Tie B)
+        </div>
+      </div>
+      <div class="substation-target-toggle">
+        <button class="btn-sub-target active" id="target-sub-a" onclick="setTargetSubstation('A')">
+          <span>● Substation A (Main)</span>
+          <small id="sub-a-cfg-summary">Single Bus · AIS</small>
+        </button>
+        <button class="btn-sub-target" id="target-sub-b" onclick="setTargetSubstation('B')">
+          <span>○ Substation B (Tie)</span>
+          <small id="sub-b-cfg-summary">Ring Bus · AIS</small>
+        </button>
+      </div>
     </div>
 
     <!-- Switchyard Busbar Architecture Selector -->
@@ -291,6 +372,12 @@ def get_html_ui():
         <button class="btn" style="width: 100%; justify-content: center; background: rgba(239, 68, 68, 0.15); border-color: #f87171; color: #fca5a5;" onclick="triggerFeederFaultEvent()">
           ⚡ Feeder SLG Fault (3.2 kA, ANSI 51N)
         </button>
+        <button class="btn" id="btn-flisr-loop" style="width: 100%; justify-content: center; background: rgba(16, 185, 129, 0.18); border-color: #10b981; color: #a7f3d0;" onclick="triggerFlisrLoopRestoration()">
+          🔁 FLISR Auto-Loop Transfer (Sub B Back-Feed)
+        </button>
+        <div id="flisr-status-readout" class="flisr-status-box">
+          Feeder Loop: 52-F1 CLOSED | 79-ACR1 CLOSED | 34-SECT CLOSED | 79-TIE (Sub B) OPEN (Normal Radial)
+        </div>
         <button class="btn" style="width: 100%; justify-content: center; background: rgba(148, 163, 184, 0.2); border-color: #94a3b8; color: #f1f5f9;" onclick="toggleBreakerState()">
           🔄 Manual Breaker Trip (52)
         </button>
@@ -537,13 +624,12 @@ def get_html_ui():
   <div class="modal-backdrop" id="help-modal">
     <div class="modal-box">
       <div class="modal-header">
-        <h3>ℹ About EE 415 Substation Simulator</h3>
+        <h3>ℹ About Substation and Distribution Simulation</h3>
         <button class="btn" onclick="closeHelpModal()">✕</button>
       </div>
       <div class="modal-body" style="font-size: 12px; line-height: 1.6; color: #cbd5e1;">
-        <p><strong>EE 415: Distribution Systems and Substation Design Lab</strong><br>
-        Department of Electrical Engineering | College of Engineering<br>
-        University of Southeastern Philippines (USeP), Davao City</p>
+        <p><strong>Substation and Distribution Simulation Suite</strong><br>
+        Power Systems Protection, Substation Design &amp; Distribution Engineering Workbench</p>
         <hr style="border: none; border-top: 1px solid var(--surface-border); margin: 8px 0;">
         <p><strong>Interactive Features & Navigation:</strong></p>
         <ul style="margin-left: 20px;">
@@ -716,6 +802,7 @@ def get_html_ui():
           <button class="btn" onclick="zoomExpandedSLD(0.83)" style="padding: 4px 8px;">➖</button>
           <button class="btn" onclick="resetExpandedSLDView()" style="padding: 4px 8px;">↺ Reset</button>
           <button class="btn" id="btn-sld-exp-pinpoint" onclick="togglePinpointFaultMode()" style="padding: 4px 9px; background: rgba(244,63,94,0.22); border-color: #f43f5e; color: #fecdd3;">🎯 Pinpoint Fault on SLD</button>
+          <button class="btn" id="btn-sld-exp-plot-tcc" onclick="plotActiveFaultOnTcc()" style="padding: 4px 9px; background: rgba(250,204,21,0.18); border-color: #facc15; color: #fef08a;">📈 Plot Fault on TCC</button>
           <button class="btn sld-clear-fault-btn" id="btn-sld-exp-clear-fault" onclick="clearFaultAndResetSystem()" style="padding: 4px 9px;">🔄 Clear Fault &amp; Reset System</button>
           <button class="btn btn-primary" onclick="closeExpandedSLD()" style="padding: 4px 10px;">🗕 Dock</button>
         </div>

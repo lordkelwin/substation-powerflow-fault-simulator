@@ -83,7 +83,7 @@ def get_css_styles():
         backdrop-filter: blur(12px);
         border-bottom: 1px solid var(--surface-border);
         display: grid;
-        grid-template-columns: minmax(185px, 260px) minmax(0, 1fr) auto;
+        grid-template-columns: minmax(215px, 290px) minmax(0, 1fr) auto;
         align-items: center;
         gap: 8px;
         padding: 4px 12px;
@@ -93,28 +93,36 @@ def get_css_styles():
       .brand {
         display: flex;
         align-items: center;
-        gap: 8px;
+        gap: 9px;
         flex-shrink: 0;
-        min-width: 180px;
-        max-width: 260px;
+        min-width: 210px;
+        max-width: 290px;
         overflow: hidden;
       }
 
       .brand-badge {
-        background: linear-gradient(135deg, #0284c7 0%, #2563eb 100%);
-        color: #fff;
-        font-weight: 800;
-        font-size: 11px;
-        padding: 4px 8px;
-        border-radius: 4px;
-        letter-spacing: 0.5px;
-        box-shadow: 0 0 12px rgba(2, 132, 199, 0.5);
+        width: 38px;
+        height: 38px;
+        padding: 3px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 9px;
+        background: linear-gradient(135deg, rgba(14, 165, 233, 0.22), rgba(245, 158, 11, 0.18));
+        border: 1px solid rgba(56, 189, 248, 0.55);
+        box-shadow: 0 0 12px rgba(56, 189, 248, 0.25);
         flex-shrink: 0;
+      }
+
+      .brand-emblem-svg {
+        display: block;
+        width: 32px;
+        height: 32px;
       }
 
       .brand-title {
         min-width: 0;
-        max-width: 195px;
+        max-width: 235px;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -2108,6 +2116,259 @@ def get_css_styles():
         text-align: right;
         color: #fef08a;
         font-weight: 700;
+      }
+
+      /* COMPACT HEADER TELEMETRY & FLOATING DRAWER */
+      .telem-compact-bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: 1 1 auto;
+        min-width: 0;
+        justify-content: flex-start;
+        overflow: hidden;
+      }
+
+      .grid-status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: rgba(16, 185, 129, 0.14);
+        border: 1px solid rgba(52, 211, 153, 0.45);
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 700;
+        color: #a7f3d0;
+        white-space: nowrap;
+        flex-shrink: 0;
+      }
+
+      .grid-status-pill.fault {
+        background: rgba(239, 68, 68, 0.2);
+        border-color: rgba(248, 113, 113, 0.65);
+        color: #fecaca;
+      }
+
+      .grid-status-pill.deenergized {
+        background: rgba(245, 158, 11, 0.16);
+        border-color: rgba(251, 191, 36, 0.5);
+        color: #fde68a;
+      }
+
+      #btn-telem-drawer {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 11px;
+        border-radius: 7px;
+        background: linear-gradient(135deg, rgba(14, 165, 233, 0.22), rgba(15, 23, 42, 0.92));
+        border: 1px solid rgba(56, 189, 248, 0.55);
+        color: #e0f2fe;
+        font-family: var(--font-sans);
+        font-size: 11px;
+        font-weight: 700;
+        cursor: pointer;
+        white-space: nowrap;
+        flex-shrink: 0;
+        transition: all 0.15s ease;
+      }
+
+      #btn-telem-drawer:hover,
+      #btn-telem-drawer.active {
+        background: rgba(14, 165, 233, 0.34);
+        border-color: #38bdf8;
+        box-shadow: 0 0 12px rgba(56, 189, 248, 0.35);
+      }
+
+      #live-telemetry-drawer {
+        display: none;
+        position: fixed;
+        top: calc(var(--header-h) + 8px);
+        left: 50%;
+        transform: translateX(-50%);
+        width: min(880px, calc(100vw - 32px));
+        max-height: calc(100vh - var(--header-h) - 24px);
+        overflow-y: auto;
+        background: rgba(9, 14, 26, 0.96);
+        backdrop-filter: blur(16px);
+        border: 1px solid rgba(56, 189, 248, 0.45);
+        border-radius: 12px;
+        padding: 12px 14px 14px;
+        z-index: 320;
+        box-shadow: 0 18px 46px rgba(0, 0, 0, 0.72), 0 0 0 1px rgba(255, 255, 255, 0.05);
+      }
+
+      #live-telemetry-drawer.open {
+        display: block;
+      }
+
+      .telem-drawer-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-bottom: 8px;
+        margin-bottom: 10px;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+      }
+
+      .telem-drawer-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        font-weight: 800;
+        color: #f8fafc;
+        letter-spacing: 0.4px;
+        text-transform: uppercase;
+      }
+
+      .telem-drawer-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+        gap: 8px;
+      }
+
+      .telem-metric-card {
+        background: rgba(15, 23, 42, 0.88);
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        border-radius: 8px;
+        padding: 8px 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .telem-metric-card.hv { border-left: 3px solid #22d3ee; }
+      .telem-metric-card.lv { border-left: 3px solid #f59e0b; }
+      .telem-metric-card.pwr { border-left: 3px solid #10b981; }
+      .telem-metric-card.gnd { border-left: 3px solid #a855f7; }
+
+      .telem-metric-card .lbl {
+        font-size: 9.5px;
+        font-weight: 700;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+      }
+
+      .telem-metric-card .val {
+        font-family: var(--font-mono);
+        font-size: 13px;
+        font-weight: 800;
+        color: #f8fafc;
+      }
+
+      .telem-metric-card .sub {
+        font-family: var(--font-mono);
+        font-size: 9.8px;
+        color: #94a3b8;
+      }
+
+      /* RELAY PROTECTION SCHEMATIC & 3D ZONE HIGHLIGHT */
+      .relay-schematic-box {
+        margin-top: 10px;
+        background: #040914;
+        border: 1px solid rgba(56, 189, 248, 0.38);
+        border-radius: 8px;
+        padding: 10px 12px;
+      }
+
+      .relay-schematic-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+
+      .relay-schematic-header h5 {
+        margin: 0;
+        font-size: 11px;
+        font-weight: 800;
+        color: #67e8f9;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .btn-zone-3d {
+        background: rgba(14, 165, 233, 0.2);
+        border: 1px solid #38bdf8;
+        color: #e0f2fe;
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-size: 10px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .btn-zone-3d.active {
+        background: rgba(244, 63, 94, 0.28);
+        border-color: #fb7185;
+        color: #ffe4e6;
+        box-shadow: 0 0 10px rgba(244, 63, 94, 0.35);
+      }
+
+      /* FLISR DISTRIBUTION LOOP STATUS */
+      .flisr-status-box {
+        margin-top: 4px;
+        padding: 6px 8px;
+        border-radius: 6px;
+        background: rgba(6, 78, 59, 0.25);
+        border: 1px solid rgba(52, 211, 153, 0.35);
+        font-family: var(--font-mono);
+        font-size: 9.8px;
+        color: #a7f3d0;
+        line-height: 1.35;
+      }
+
+      /* TARGET SUBSTATION (A vs. TIE B) SELECTOR */
+      .substation-target-toggle {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+      }
+
+      .btn-sub-target {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
+        padding: 7px 8px;
+        border-radius: 7px;
+        background: rgba(15, 23, 42, 0.72);
+        border: 1px solid rgba(148, 163, 184, 0.25);
+        color: #cbd5e1;
+        font-size: 10.5px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.16s ease;
+        text-align: left;
+      }
+
+      .btn-sub-target:hover {
+        border-color: rgba(56, 189, 248, 0.55);
+        background: rgba(14, 165, 233, 0.12);
+      }
+
+      .btn-sub-target.active {
+        background: linear-gradient(135deg, rgba(16, 185, 129, 0.22), rgba(14, 165, 233, 0.22));
+        border-color: #10b981;
+        color: #ecfdf5;
+        box-shadow: 0 0 12px rgba(16, 185, 129, 0.28);
+      }
+
+      .btn-sub-target small {
+        font-family: var(--font-mono);
+        font-size: 9px;
+        font-weight: 500;
+        color: #94a3b8;
+      }
+
+      .btn-sub-target.active small {
+        color: #6ee7b7;
       }
     </style>
     """
